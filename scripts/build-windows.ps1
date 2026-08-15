@@ -48,12 +48,12 @@ $PythonExe = $Python[0]
 $PythonArg = $Python[1]
 
 function Invoke-Python {
-    param([string[]]$Args)
+    param([string[]]$PythonArgs)
 
     if ($PythonArg) {
-        & $PythonExe $PythonArg @Args
+        & $PythonExe $PythonArg @PythonArgs
     } else {
-        & $PythonExe @Args
+        & $PythonExe @PythonArgs
     }
 }
 
