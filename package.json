@@ -1,0 +1,81 @@
+{
+  "name": "ai-character-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI Character Platform desktop client",
+  "main": "electron/main.js",
+  "scripts": {
+    "web": "python3 web_server.py",
+    "dev": "vite --host 127.0.0.1 --port 5173",
+    "build:web": "vite build",
+    "electron": "electron .",
+    "start": "electron .",
+    "dist": "npm run build:web && electron-builder --mac dir",
+    "dist:dmg": "npm run build:web && electron-builder --mac dmg",
+    "dist:win": "powershell -ExecutionPolicy Bypass -File scripts/build-windows.ps1"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "vite": "^6.0.7"
+  },
+  "devDependencies": {
+    "electron": "^37.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.ai-character-platform.desktop",
+    "productName": "AI Character Platform",
+    "files": [
+      "electron/**/*",
+      "dist-web/**/*",
+      "web_server.py",
+      "character_runtime/**/*",
+      "characters/**/*",
+      "main.py",
+      "pyproject.toml",
+      "README.md"
+    ],
+    "asarUnpack": [
+      "web_server.py",
+      "character_runtime/**/*",
+      "characters/**/*",
+      "dist-web/**/*",
+      "main.py",
+      "pyproject.toml",
+      ".env.example"
+    ],
+    "extraResources": [
+      {
+        "from": "characters",
+        "to": "characters"
+      }
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "mac": {
+      "target": "dir"
+    },
+    "win": {
+      "target": "nsis",
+      "extraResources": [
+        {
+          "from": "dist/backend",
+          "to": "backend",
+          "filter": [
+            "**/*"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AI Character Platform"
+    }
+  }
+}

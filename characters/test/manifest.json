@@ -1,0 +1,13 @@
+{
+  "format_version": 1,
+  "id": "character_asuna_001",
+  "name": "Asuna",
+  "display_name": "亚丝娜",
+  "version": "1.0.0",
+  "author": "example",
+  "entry": "CHARACTER.md",
+  "index": "INDEX.md",
+  "avatar": "avatar/default.svg",
+  "voice": "voice/voice.json",
+  "license_id": "demo_license"
+}

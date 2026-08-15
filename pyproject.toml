@@ -1,0 +1,9 @@
+[project]
+name = "ai-character-platform"
+version = "0.1.0"
+description = "AI 二次元角色交互平台 Python MVP"
+requires-python = ">=3.11"
+
+[tool.setuptools]
+packages = ["character_runtime"]
+

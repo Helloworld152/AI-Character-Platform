@@ -1,0 +1,11 @@
+{
+  "enabled": false,
+  "provider": "authorized_tts",
+  "voice_id": "replace_with_licensed_cv_voice_id",
+  "display_name": "由比滨结衣授权音色",
+  "speed": 1.02,
+  "pitch": 0.0,
+  "volume": 1.0,
+  "requires_authorized_voice": true,
+  "notes": "只能填写已获得授权的 CV 音色、官方 TTS voice_id 或自有授权声音模型。不要使用未授权声优录音进行克隆。"
+}

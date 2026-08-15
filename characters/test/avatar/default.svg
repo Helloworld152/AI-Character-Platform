@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Asuna avatar">
+  <rect width="256" height="256" fill="#f1d9bd"/>
+  <circle cx="128" cy="112" r="70" fill="#ffe6d0"/>
+  <path d="M48 106c18-50 45-76 82-76 43 0 74 31 82 81-29-18-58-27-87-27-27 0-53 7-77 22z" fill="#c98245"/>
+  <path d="M66 182c18-34 39-51 62-51s45 17 64 51v44H66z" fill="#b83e37"/>
+  <circle cx="103" cy="116" r="8" fill="#3d2d28"/>
+  <circle cx="153" cy="116" r="8" fill="#3d2d28"/>
+  <path d="M106 148c15 11 30 11 45 0" fill="none" stroke="#b96663" stroke-width="7" stroke-linecap="round"/>
+  <path d="M29 256h198c-8-45-41-70-99-70s-91 25-99 70z" fill="#f4f0e6"/>
+</svg>

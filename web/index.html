@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AI Character Platform</title>
+    <link rel="stylesheet" href="/app.css">
+  </head>
+  <body>
+    <main class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark">ACP</span>
+          <div>
+            <h1>Character Runtime</h1>
+            <p>Electron Desktop Client</p>
+          </div>
+        </div>
+        <section class="panel">
+          <div class="panel-title">角色</div>
+          <div id="characterList" class="character-list"></div>
+        </section>
+      </aside>
+
+      <section class="chat">
+        <header class="chat-header">
+          <div class="active-character">
+            <img id="activeAvatar" class="active-avatar" alt="">
+            <div>
+              <p class="eyebrow">当前角色</p>
+              <h2 id="activeName">加载中</h2>
+            </div>
+          </div>
+          <div id="status" class="status">准备中</div>
+        </header>
+
+        <div id="messages" class="messages"></div>
+
+        <form id="chatForm" class="composer">
+          <textarea id="messageInput" rows="2" placeholder="输入你想说的话"></textarea>
+          <button id="sendButton" type="submit">发送</button>
+        </form>
+      </section>
+
+      <aside class="settings">
+        <section class="panel settings-panel">
+          <div class="panel-title">API 设置</div>
+          <form id="settingsForm" class="settings-form">
+            <label>
+              <span>模式</span>
+              <select id="llmMode">
+                <option value="auto">自动</option>
+                <option value="rulebased">本地规则</option>
+              </select>
+            </label>
+            <label>
+              <span>DeepSeek API Key</span>
+              <input id="apiKey" type="password" autocomplete="off" placeholder="不显示已保存 key">
+            </label>
+            <div id="apiKeyPreview" class="settings-note">未配置</div>
+            <label>
+              <span>模型</span>
+              <input id="model" type="text" value="deepseek-v4-flash">
+            </label>
+            <label>
+              <span>Base URL</span>
+              <input id="baseUrl" type="text" value="https://api.deepseek.com">
+            </label>
+            <div class="settings-grid">
+              <label>
+                <span>历史消息</span>
+                <input id="recentMessages" type="number" min="10" max="200" step="10">
+              </label>
+              <label>
+                <span>工具结果</span>
+                <input id="toolResults" type="number" min="1" max="30">
+              </label>
+            </div>
+            <div class="settings-grid">
+              <label>
+                <span>温度</span>
+                <input id="temperature" type="number" min="0" max="2" step="0.1">
+              </label>
+              <label>
+                <span>超时秒数</span>
+                <input id="timeoutSeconds" type="number" min="10" max="180">
+              </label>
+            </div>
+            <label>
+              <span>Thinking</span>
+              <select id="thinking">
+                <option value="disabled">disabled</option>
+                <option value="enabled">enabled</option>
+              </select>
+            </label>
+            <button id="saveSettings" type="submit">保存设置</button>
+          </form>
+        </section>
+      </aside>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>

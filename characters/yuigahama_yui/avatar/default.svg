@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Yuigahama Yui avatar">
+  <rect width="256" height="256" fill="#f7d7c3"/>
+  <circle cx="128" cy="112" r="68" fill="#ffe2cf"/>
+  <path d="M45 118c8-56 39-88 85-88 48 0 78 34 82 92-18-19-42-31-72-36-35-6-67 5-95 32z" fill="#d77b53"/>
+  <path d="M77 78c13-21 34-33 61-35-5 23-27 39-61 35z" fill="#e79167"/>
+  <circle cx="101" cy="118" r="8" fill="#4a302d"/>
+  <circle cx="154" cy="118" r="8" fill="#4a302d"/>
+  <circle cx="83" cy="139" r="10" fill="#f0a0a7" opacity=".72"/>
+  <circle cx="172" cy="139" r="10" fill="#f0a0a7" opacity=".72"/>
+  <path d="M107 149c14 14 30 14 44 0" fill="none" stroke="#c85f6a" stroke-width="7" stroke-linecap="round"/>
+  <path d="M40 256h176c-9-43-38-68-88-68s-79 25-88 68z" fill="#ffffff"/>
+  <path d="M92 197l36 36 36-36" fill="none" stroke="#e56e89" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
