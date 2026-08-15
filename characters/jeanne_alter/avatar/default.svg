@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#17121a"/>
+      <stop offset="0.55" stop-color="#3a1620"/>
+      <stop offset="1" stop-color="#b3322c"/>
+    </linearGradient>
+  </defs>
+  <rect width="160" height="160" rx="28" fill="url(#g)"/>
+  <path d="M32 112 54 36l26 42 26-42 22 76-48-22-48 22Z" fill="#f0d4a8" opacity=".9"/>
+  <path d="M42 122c20-20 56-20 76 0" fill="none" stroke="#f6efe5" stroke-width="10" stroke-linecap="round"/>
+  <text x="80" y="92" text-anchor="middle" font-family="Georgia, serif" font-size="34" font-weight="700" fill="#17121a">Alter</text>
+</svg>

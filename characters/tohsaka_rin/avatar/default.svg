@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#21121a"/>
+      <stop offset="0.48" stop-color="#7b111d"/>
+      <stop offset="1" stop-color="#e7b85b"/>
+    </linearGradient>
+  </defs>
+  <rect width="160" height="160" rx="28" fill="url(#g)"/>
+  <circle cx="80" cy="64" r="34" fill="#f1d0b6"/>
+  <path d="M38 64c10-36 74-36 84 0-18-18-66-18-84 0Z" fill="#1b1218"/>
+  <path d="M44 124c12-28 60-38 72 0" fill="#d71f2d"/>
+  <path d="M52 34 24 54M108 34l28 20" stroke="#1b1218" stroke-width="14" stroke-linecap="round"/>
+  <text x="80" y="96" text-anchor="middle" font-family="Georgia, serif" font-size="28" font-weight="700" fill="#21121a">Rin</text>
+</svg>

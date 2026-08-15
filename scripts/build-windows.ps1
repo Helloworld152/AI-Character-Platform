@@ -1,3 +1,7 @@
+param(
+    [switch]$SkipNpmInstall
+)
+
 $ErrorActionPreference = "Stop"
 
 $Root = Split-Path -Parent $PSScriptRoot
@@ -58,8 +62,10 @@ Run-Step "Check Node.js and npm" {
     npm --version
 }
 
-Run-Step "Install npm dependencies" {
-    npm install
+if (-not $SkipNpmInstall) {
+    Run-Step "Install npm dependencies" {
+        npm install
+    }
 }
 
 Run-Step "Build web assets" {
