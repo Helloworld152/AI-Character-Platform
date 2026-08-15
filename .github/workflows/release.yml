@@ -28,7 +28,7 @@ jobs:
         run: npm ci
 
       - name: Build DMG
-        run: npm run dist:dmg
+        run: bash scripts/build-macos-dmg.sh
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
@@ -36,7 +36,6 @@ jobs:
           name: macos-dmg
           path: |
             release/*.dmg
-            release/*.dmg.blockmap
           if-no-files-found: error
 
   build-windows:

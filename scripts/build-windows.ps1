@@ -70,6 +70,9 @@ if (-not $SkipNpmInstall) {
 
 Run-Step "Build web assets" {
     npm run build:web
+    if (-not (Test-Path "dist-web\index.html")) {
+        throw "dist-web\index.html was not generated."
+    }
 }
 
 Run-Step "Install PyInstaller if missing" {
@@ -100,10 +103,19 @@ Run-Step "Build Python backend exe" {
         "--add-data", ".env.example;.",
         "web_server.py"
     )
+
+    if (-not (Test-Path "dist\backend\backend.exe")) {
+        throw "dist\backend\backend.exe was not generated."
+    }
 }
 
 Run-Step "Build Windows installer" {
     npx electron-builder --win nsis
+    $Installer = Get-ChildItem "release" -Filter "*.exe" -File | Select-Object -First 1
+    if (-not $Installer) {
+        throw "Windows installer was not generated in release\."
+    }
+    Write-Host "Generated installer: $($Installer.FullName)"
 }
 
 Write-Host ""
