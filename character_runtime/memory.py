@@ -14,6 +14,14 @@ class MemoryManager:
         memories = self._database.search_memories(user_id, character_id, query)
         return "\n".join(memories) if memories else "(no memories)"
 
+    def list_memories(
+        self,
+        user_id: str,
+        character_id: str | None = None,
+        limit: int = 100,
+    ) -> list[dict]:
+        return self._database.list_memories(user_id, character_id, limit)
+
     def write_character_memory(
         self,
         user_id: str,

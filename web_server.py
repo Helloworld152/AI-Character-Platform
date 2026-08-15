@@ -55,6 +55,9 @@ class WebHandler(BaseHTTPRequestHandler):
         if path == "/api/messages":
             self._handle_messages()
             return
+        if path == "/api/memories":
+            self._handle_memories()
+            return
         if path == "/api/voice":
             self._handle_voice()
             return
@@ -156,6 +159,27 @@ class WebHandler(BaseHTTPRequestHandler):
 
     def _handle_get_settings(self) -> None:
         self._send_json({"settings": _read_settings()})
+
+    def _handle_memories(self) -> None:
+        query = parse_qs(urlparse(self.path).query)
+        limit = _bounded_int(query.get("limit", ["100"])[0], default=100, minimum=1, maximum=500)
+        with RUNTIME_LOCK:
+            character = RUNTIME.character_manager.active_or_none()
+            character_id = character.id if character else None
+            memories = RUNTIME.memory.list_memories("local_user", character_id, limit=limit)
+        self._send_json(
+            {
+                "character": (
+                    {
+                        "id": character.id,
+                        "display_name": character.display_name,
+                    }
+                    if character
+                    else None
+                ),
+                "memories": [_memory_record(item) for item in memories],
+            }
+        )
 
     def _handle_voice(self) -> None:
         with RUNTIME_LOCK:
@@ -360,6 +384,15 @@ def _bounded_int(value: str, default: int, minimum: int, maximum: int) -> int:
     except ValueError:
         return default
     return max(minimum, min(maximum, parsed))
+
+
+def _memory_record(memory: dict) -> dict:
+    memory_type = int(memory["type"])
+    return {
+        **memory,
+        "scope": "global" if memory["character_id"] is None else "character",
+        "type_label": "全局记忆" if memory_type == 0 else "角色记忆",
+    }
 
 
 def _content_type(path: Path) -> str:

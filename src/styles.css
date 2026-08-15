@@ -503,6 +503,79 @@ label span,
   border-bottom: 1px solid var(--line);
 }
 
+.memory-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(47, 113, 95, 0.16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.memory-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.memory-head strong,
+.memory-head p,
+.memory-card p,
+.memory-card small {
+  margin: 0;
+}
+
+.memory-head p,
+.memory-card small,
+.memory-meta,
+.memory-empty {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.memory-list {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.memory-card {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.memory-card p {
+  line-height: 1.55;
+}
+
+.memory-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.memory-meta span {
+  padding: 2px 7px;
+  color: var(--accent);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  font-weight: 800;
+}
+
+.memory-empty {
+  padding: 10px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.52);
+}
+
 .settings-pane label {
   display: grid;
   gap: 6px;

@@ -153,6 +153,63 @@ class Database:
         ).fetchall()
         return [row["content"] for row in rows]
 
+    def list_memories(
+        self,
+        user_id: str,
+        character_id: str | None = None,
+        limit: int = 100,
+    ) -> list[dict]:
+        if character_id:
+            rows = self._connection.execute(
+                """
+                SELECT memories.id,
+                       memories.character_id,
+                       characters.display_name AS character_display_name,
+                       memories.type,
+                       memories.content,
+                       memories.importance,
+                       memories.created_at
+                FROM memories
+                LEFT JOIN characters ON characters.id = memories.character_id
+                WHERE memories.user_id = ?
+                  AND (memories.character_id IS NULL OR memories.character_id = ?)
+                ORDER BY memories.importance DESC, memories.created_at DESC
+                LIMIT ?
+                """,
+                (user_id, character_id, limit),
+            ).fetchall()
+        else:
+            rows = self._connection.execute(
+                """
+                SELECT memories.id,
+                       memories.character_id,
+                       characters.display_name AS character_display_name,
+                       memories.type,
+                       memories.content,
+                       memories.importance,
+                       memories.created_at
+                FROM memories
+                LEFT JOIN characters ON characters.id = memories.character_id
+                WHERE memories.user_id = ?
+                ORDER BY memories.importance DESC, memories.created_at DESC
+                LIMIT ?
+                """,
+                (user_id, limit),
+            ).fetchall()
+
+        return [
+            {
+                "id": int(row["id"]),
+                "character_id": row["character_id"],
+                "character_display_name": row["character_display_name"],
+                "type": int(row["type"]),
+                "content": row["content"],
+                "importance": float(row["importance"]),
+                "created_at": int(row["created_at"]),
+            }
+            for row in rows
+        ]
+
     def _migrate(self) -> None:
         self._connection.executescript(
             """

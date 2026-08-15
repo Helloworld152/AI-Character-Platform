@@ -94,7 +94,7 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
         run: |
-          npx electron-builder --win nsis
+          npx electron-builder --win nsis --publish never
           Get-ChildItem release -Recurse
 
       - name: Upload Windows artifact

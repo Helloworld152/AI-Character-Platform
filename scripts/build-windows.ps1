@@ -110,7 +110,7 @@ Run-Step "Build Python backend exe" {
 }
 
 Run-Step "Build Windows installer" {
-    npx electron-builder --win nsis
+    npx electron-builder --win nsis --publish never
     $Installer = Get-ChildItem "release" -Filter "*.exe" -File | Select-Object -First 1
     if (-not $Installer) {
         throw "Windows installer was not generated in release\."

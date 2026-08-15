@@ -43,10 +43,12 @@ function App() {
   const [activeCharacter, setActiveCharacter] = useState(null);
   const [messages, setMessages] = useState([]);
   const [settings, setSettings] = useState(initialSettings);
+  const [memories, setMemories] = useState([]);
   const [apiKey, setApiKey] = useState("");
   const [input, setInput] = useState("");
   const [status, setStatus] = useState("启动中");
   const [busy, setBusy] = useState(false);
+  const [memoryLoading, setMemoryLoading] = useState(false);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const messageListRef = useRef(null);
@@ -64,6 +66,12 @@ function App() {
       list.scrollTop = list.scrollHeight;
     });
   }, [messages]);
+
+  useEffect(() => {
+    if (settingsOpen) {
+      loadMemories();
+    }
+  }, [settingsOpen, activeCharacterId]);
 
   async function boot() {
     try {
@@ -98,6 +106,18 @@ function App() {
   async function loadSettings() {
     const payload = await requestJson("/api/settings");
     setSettings(payload.settings);
+  }
+
+  async function loadMemories() {
+    setMemoryLoading(true);
+    try {
+      const payload = await requestJson("/api/memories?limit=120");
+      setMemories(payload.memories);
+    } catch (error) {
+      setStatus(error.message);
+    } finally {
+      setMemoryLoading(false);
+    }
   }
 
   async function switchCharacter(characterId) {
@@ -315,6 +335,35 @@ function App() {
             </div>
             <button className="ghost-button" onClick={() => setSettingsOpen(false)} type="button">收起</button>
           </div>
+          <section className="memory-panel">
+            <div className="memory-head">
+              <div>
+                <strong>记忆库</strong>
+                <p>{activeCharacter ? `当前：${activeCharacter.display_name}` : "未选择角色，显示全部记忆"}</p>
+              </div>
+              <button className="ghost-button" disabled={memoryLoading} onClick={loadMemories} type="button">
+                {memoryLoading ? "刷新中" : "刷新"}
+              </button>
+            </div>
+            <div className="memory-list">
+              {memories.length === 0 ? (
+                <div className="memory-empty">还没有提取到记忆。多聊几轮后，小模型会逐步沉淀重要信息。</div>
+              ) : (
+                memories.map((memory) => (
+                  <article className="memory-card" key={memory.id}>
+                    <div className="memory-meta">
+                      <span>{memory.type_label}</span>
+                      <time>{formatMessageTime(memory.created_at)}</time>
+                    </div>
+                    {memory.character_display_name && (
+                      <small>{memory.character_display_name}</small>
+                    )}
+                    <p>{memory.content}</p>
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
           <label>
             <span>模式</span>
             <select value={settings.llm_mode} onChange={(event) => updateSetting("llm_mode", event.target.value)}>
