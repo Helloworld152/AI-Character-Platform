@@ -1,8 +1,12 @@
 {
   "name": "ai-character-platform",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "description": "AI Character Platform desktop client",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Helloworld152/AI-Character-Platform.git"
+  },
   "main": "electron/main.js",
   "scripts": {
     "web": "python3 web_server.py",
@@ -10,12 +14,14 @@
     "build:web": "vite build",
     "electron": "electron .",
     "start": "electron .",
-    "dist": "npm run build:web && electron-builder --mac dir",
-    "dist:dmg": "npm run build:web && electron-builder --mac dmg",
-    "dist:win": "powershell -ExecutionPolicy Bypass -File scripts/build-windows.ps1"
+    "dist": "npm run build:web && electron-builder --mac",
+    "dist:dmg": "npm run build:web && electron-builder --mac dmg zip",
+    "dist:win": "powershell -ExecutionPolicy Bypass -File scripts/build-windows.ps1",
+    "dist:win:portable": "npm run build:web && electron-builder --win portable"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",
+    "electron-updater": "^6.8.9",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "vite": "^6.0.7"
@@ -55,11 +61,24 @@
     "directories": {
       "output": "release"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Helloworld152",
+        "repo": "AI-Character-Platform"
+      }
+    ],
     "mac": {
-      "target": "dir"
+      "target": [
+        "dmg",
+        "zip"
+      ]
     },
     "win": {
-      "target": "nsis",
+      "target": [
+        "nsis",
+        "portable"
+      ],
       "extraResources": [
         {
           "from": "dist/backend",

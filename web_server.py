@@ -1,19 +1,32 @@
 from __future__ import annotations
 
+import cgi
 import json
 import os
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from urllib.parse import parse_qs, unquote, urlparse
 
+from character_runtime.character_manager import CharacterPackageError
+from character_runtime.paths import get_data_root
 from character_runtime.runtime import create_runtime
 
 
 ROOT = Path(os.environ.get("AI_CHARACTER_APP_ROOT", Path(__file__).resolve().parent)).resolve()
+DATA_ROOT = get_data_root()
 WEB_ROOT = ROOT / "dist-web" if (ROOT / "dist-web").exists() else ROOT / "web"
-RUNTIME = create_runtime(ROOT)
+RUNTIME = create_runtime(ROOT, DATA_ROOT)
 RUNTIME_LOCK = threading.Lock()
+MAX_AVATAR_BYTES = 5 * 1024 * 1024
+MAX_IMPORT_BYTES = 80 * 1024 * 1024
+AVATAR_TYPES = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/webp": ".webp",
+    "image/svg+xml": ".svg",
+}
 ENV_KEYS = [
     "DEEPSEEK_API_KEY",
     "DEEPSEEK_MODEL",
@@ -74,6 +87,15 @@ class WebHandler(BaseHTTPRequestHandler):
                 return
             if path == "/api/settings":
                 self._handle_save_settings()
+                return
+            if path == "/api/memories/delete":
+                self._handle_delete_memory()
+                return
+            if path == "/api/characters/import":
+                self._handle_import_character()
+                return
+            if path == "/api/characters/avatar":
+                self._handle_update_avatar()
                 return
             if path == "/api/shutdown":
                 self._handle_shutdown()
@@ -209,6 +231,167 @@ class WebHandler(BaseHTTPRequestHandler):
         self._reload_runtime()
         self._send_json({"settings": _read_settings()})
 
+    def _handle_delete_memory(self) -> None:
+        payload = self._read_json()
+        memory_id = _bounded_int(str(payload.get("memory_id", "")), default=0, minimum=0, maximum=999999999)
+        if memory_id <= 0:
+            self._send_json({"error": "memory_id is required"}, status=400)
+            return
+
+        with RUNTIME_LOCK:
+            deleted = RUNTIME.database.delete_memory("local_user", memory_id)
+        if not deleted:
+            self._send_json({"error": "记忆不存在或无权删除"}, status=404)
+            return
+        self._send_json({"deleted": True, "memory_id": memory_id})
+
+    def _handle_import_character(self) -> None:
+        try:
+            form = self._read_multipart(MAX_IMPORT_BYTES + MAX_AVATAR_BYTES + 1024 * 1024)
+        except ValueError as error:
+            self._send_json({"error": str(error)}, status=400)
+            return
+
+        character_id = _field_value(form, "character_id")
+        name = _field_value(form, "name")
+        display_name = _field_value(form, "display_name")
+        author = _field_value(form, "author")
+        version = _field_value(form, "version") or "1.0.0"
+
+        package_upload = form["package"] if "package" in form else None
+        if package_upload is None or not getattr(package_upload, "file", None):
+            self._send_json({"error": "package file is required"}, status=400)
+            return
+
+        avatar_upload = form["avatar"] if "avatar" in form else None
+        if avatar_upload is None or not getattr(avatar_upload, "file", None):
+            self._send_json({"error": "avatar file is required"}, status=400)
+            return
+
+        package_filename = str(getattr(package_upload, "filename", "") or "")
+        if package_filename and not package_filename.lower().endswith(".zip"):
+            self._send_json({"error": "只支持 .zip 内容包"}, status=400)
+            return
+
+        avatar_type = str(avatar_upload.type or "").split(";", 1)[0].strip().lower()
+        avatar_suffix = AVATAR_TYPES.get(avatar_type)
+        if not avatar_suffix:
+            self._send_json({"error": "只支持 png、jpg、webp、svg 头像"}, status=400)
+            return
+
+        package_path: Path | None = None
+        avatar_path: Path | None = None
+        try:
+            with NamedTemporaryFile(prefix="character-package-", suffix=".zip", delete=False) as temp_file:
+                package_path = Path(temp_file.name)
+                _write_limited_upload(package_upload.file, package_path, MAX_IMPORT_BYTES)
+            with NamedTemporaryFile(prefix="character-avatar-", suffix=avatar_suffix, delete=False) as temp_file:
+                avatar_path = Path(temp_file.name)
+                _write_limited_upload(avatar_upload.file, avatar_path, MAX_AVATAR_BYTES)
+
+            with RUNTIME_LOCK:
+                character = RUNTIME.character_manager.create_character_from_markdown_package(
+                    character_id=character_id,
+                    name=name,
+                    display_name=display_name,
+                    author=author,
+                    version=version,
+                    package_path=package_path,
+                    avatar_path=avatar_path,
+                    avatar_suffix=avatar_suffix,
+                )
+                RUNTIME.database.register_character(character.id, character.display_name)
+                RUNTIME.character_manager.activate(character.id)
+
+            self._send_json(
+                {
+                    "character": {
+                        "id": character.id,
+                        "name": character.manifest.name,
+                        "display_name": character.display_name,
+                        "version": character.manifest.version,
+                        "author": character.manifest.author,
+                        "avatar_url": self._avatar_url(character),
+                        "active": True,
+                    }
+                }
+            )
+        except CharacterPackageError as error:
+            self._send_json({"error": str(error)}, status=400)
+        except ValueError as error:
+            self._send_json({"error": str(error)}, status=400)
+        finally:
+            if package_path:
+                package_path.unlink(missing_ok=True)
+            if avatar_path:
+                avatar_path.unlink(missing_ok=True)
+
+    def _handle_update_avatar(self) -> None:
+        try:
+            form = self._read_multipart(MAX_AVATAR_BYTES + 1024 * 1024)
+        except ValueError as error:
+            self._send_json({"error": str(error)}, status=400)
+            return
+        character_id = _field_value(form, "character_id")
+        if not character_id:
+            self._send_json({"error": "character_id is required"}, status=400)
+            return
+
+        upload = form["avatar"] if "avatar" in form else None
+        if upload is None or not getattr(upload, "file", None):
+            self._send_json({"error": "avatar file is required"}, status=400)
+            return
+
+        content_type = str(upload.type or "").split(";", 1)[0].strip().lower()
+        suffix = AVATAR_TYPES.get(content_type)
+        if not suffix:
+            self._send_json({"error": "只支持 png、jpg、webp、svg 头像"}, status=400)
+            return
+
+        with RUNTIME_LOCK:
+            character = next(
+                (item for item in RUNTIME.character_manager.list_characters() if item.id == character_id),
+                None,
+            )
+            if character is None:
+                self._send_json({"error": "未知角色"}, status=404)
+                return
+
+            avatar_dir = character.root / "avatar"
+            avatar_dir.mkdir(parents=True, exist_ok=True)
+            avatar_path = avatar_dir / f"custom{suffix}"
+            try:
+                bytes_written = _write_limited_upload(upload.file, avatar_path, MAX_AVATAR_BYTES)
+            except ValueError as error:
+                self._send_json({"error": str(error)}, status=400)
+                return
+            if bytes_written <= 0:
+                avatar_path.unlink(missing_ok=True)
+                self._send_json({"error": "头像文件为空"}, status=400)
+                return
+
+            manifest_path = character.root / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["avatar"] = f"avatar/custom{suffix}"
+            manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+            active = RUNTIME.character_manager.active_or_none()
+            active_character_id = active.id if active else None
+            RUNTIME.character_manager.reload()
+            if active_character_id:
+                RUNTIME.character_manager.activate(active_character_id)
+            updated = RUNTIME.character_manager.activate(character_id)
+
+        self._send_json(
+            {
+                "character": {
+                    "id": updated.id,
+                    "display_name": updated.display_name,
+                    "avatar_url": self._avatar_url(updated),
+                }
+            }
+        )
+
     def _handle_shutdown(self) -> None:
         if self.client_address[0] not in {"127.0.0.1", "::1"}:
             self._send_json({"error": "forbidden"}, status=403)
@@ -265,7 +448,7 @@ class WebHandler(BaseHTTPRequestHandler):
                 RUNTIME.database.close()
             except Exception:
                 pass
-            RUNTIME = create_runtime(ROOT)
+            RUNTIME = create_runtime(ROOT, DATA_ROOT)
             if active_character_id:
                 RUNTIME.character_manager.activate(active_character_id)
 
@@ -275,6 +458,23 @@ class WebHandler(BaseHTTPRequestHandler):
             return {}
         raw = self.rfile.read(length).decode("utf-8")
         return json.loads(raw)
+
+    def _read_multipart(self, max_bytes: int) -> cgi.FieldStorage:
+        content_type = self.headers.get("Content-Type", "")
+        if not content_type.startswith("multipart/form-data"):
+            raise ValueError("Content-Type must be multipart/form-data")
+        content_length = int(self.headers.get("Content-Length", "0"))
+        if content_length > max_bytes:
+            raise ValueError("上传请求超过大小限制")
+        return cgi.FieldStorage(
+            fp=self.rfile,
+            headers=self.headers,
+            environ={
+                "REQUEST_METHOD": "POST",
+                "CONTENT_TYPE": content_type,
+                "CONTENT_LENGTH": str(content_length),
+            },
+        )
 
     def _send_json(self, payload: dict, status: int = 200) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -312,7 +512,7 @@ def main() -> int:
     return 0
 
 def _read_env_file() -> dict[str, str]:
-    env_path = ROOT / ".env"
+    env_path = DATA_ROOT / ".env"
     if not env_path.exists():
         return {}
 
@@ -367,7 +567,8 @@ def _write_settings(settings: dict) -> None:
         os.environ[env_key] = value
 
     lines = [f"{key}={current[key]}" for key in ENV_KEYS if key in current and current[key]]
-    (ROOT / ".env").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    DATA_ROOT.mkdir(parents=True, exist_ok=True)
+    (DATA_ROOT / ".env").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def _mask_key(api_key: str) -> str:
@@ -384,6 +585,31 @@ def _bounded_int(value: str, default: int, minimum: int, maximum: int) -> int:
     except ValueError:
         return default
     return max(minimum, min(maximum, parsed))
+
+
+def _field_value(form: cgi.FieldStorage, name: str) -> str:
+    if name not in form:
+        return ""
+    field = form[name]
+    if isinstance(field, list):
+        field = field[0]
+    return str(field.value or "").strip()
+
+
+def _write_limited_upload(source, destination: Path, limit: int) -> int:
+    total = 0
+    with destination.open("wb") as output:
+        while True:
+            chunk = source.read(1024 * 64)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > limit:
+                output.close()
+                destination.unlink(missing_ok=True)
+                raise ValueError("头像文件超过 5MB 限制")
+            output.write(chunk)
+    return total
 
 
 def _memory_record(memory: dict) -> dict:

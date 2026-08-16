@@ -1,4 +1,5 @@
-const { app, BrowserWindow } = require("electron");
+const { app, BrowserWindow, ipcMain } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const { spawn } = require("child_process");
 const http = require("http");
 const path = require("path");
@@ -11,6 +12,7 @@ const port = process.env.AI_CHARACTER_PORT || "8787";
 const host = "127.0.0.1";
 const url = `http://${host}:${port}`;
 const rendererUrl = process.env.VITE_DEV_SERVER_URL || url;
+const dataRoot = app.getPath("userData");
 const packagedBackend = process.platform === "win32"
   ? path.join(process.resourcesPath, "backend", "backend.exe")
   : null;
@@ -19,6 +21,82 @@ let backend = null;
 let backendPid = null;
 let mainWindow = null;
 let isQuitting = false;
+let updateDownloaded = false;
+
+autoUpdater.autoDownload = false;
+
+function sendUpdateStatus(payload) {
+  if (!mainWindow) {
+    return;
+  }
+  mainWindow.webContents.send("updater:status", payload);
+}
+
+function setupUpdater() {
+  autoUpdater.on("checking-for-update", () => {
+    sendUpdateStatus({ state: "checking" });
+  });
+  autoUpdater.on("update-available", (info) => {
+    updateDownloaded = false;
+    sendUpdateStatus({
+      state: "available",
+      version: info.version,
+      releaseDate: info.releaseDate,
+    });
+  });
+  autoUpdater.on("update-not-available", (info) => {
+    updateDownloaded = false;
+    sendUpdateStatus({ state: "not-available", version: info.version });
+  });
+  autoUpdater.on("download-progress", (progress) => {
+    sendUpdateStatus({
+      state: "downloading",
+      percent: Math.round(progress.percent || 0),
+      transferred: progress.transferred,
+      total: progress.total,
+    });
+  });
+  autoUpdater.on("update-downloaded", (info) => {
+    updateDownloaded = true;
+    sendUpdateStatus({
+      state: "downloaded",
+      version: info.version,
+      releaseDate: info.releaseDate,
+    });
+  });
+  autoUpdater.on("error", (error) => {
+    sendUpdateStatus({ state: "error", message: error.message || String(error) });
+  });
+}
+
+function setupUpdaterIpc() {
+  ipcMain.handle("updater:check", async () => {
+    if (!app.isPackaged) {
+      return { state: "disabled", message: "更新检查仅在正式安装包中可用" };
+    }
+    sendUpdateStatus({ state: "checking" });
+    await autoUpdater.checkForUpdates();
+    return { state: "checking" };
+  });
+
+  ipcMain.handle("updater:download", async () => {
+    if (!app.isPackaged) {
+      return { state: "disabled", message: "更新下载仅在正式安装包中可用" };
+    }
+    await autoUpdater.downloadUpdate();
+    return { state: "downloading" };
+  });
+
+  ipcMain.handle("updater:install", async () => {
+    if (!updateDownloaded) {
+      return { state: "error", message: "没有已下载的更新" };
+    }
+    isQuitting = true;
+    await stopBackend();
+    autoUpdater.quitAndInstall(false, true);
+    return { state: "installing" };
+  });
+}
 
 function startBackend() {
   const usePackagedBackend = Boolean(isPackaged && packagedBackend);
@@ -37,6 +115,7 @@ function startBackend() {
     AI_CHARACTER_HOST: host,
     AI_CHARACTER_PORT: port,
     AI_CHARACTER_APP_ROOT: root,
+    AI_CHARACTER_DATA_DIR: dataRoot,
   };
 
   backend = spawn(command, args, {
@@ -140,11 +219,15 @@ async function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      preload: path.join(__dirname, "preload.js"),
     },
   });
 
   await mainWindow.loadURL(rendererUrl);
 }
+
+setupUpdater();
+setupUpdaterIpc();
 
 app.whenReady().then(createWindow);
 

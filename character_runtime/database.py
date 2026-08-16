@@ -210,6 +210,17 @@ class Database:
             for row in rows
         ]
 
+    def delete_memory(self, user_id: str, memory_id: int) -> bool:
+        cursor = self._connection.execute(
+            """
+            DELETE FROM memories
+            WHERE id = ? AND user_id = ?
+            """,
+            (memory_id, user_id),
+        )
+        self._connection.commit()
+        return cursor.rowcount > 0
+
     def _migrate(self) -> None:
         self._connection.executescript(
             """

@@ -7,7 +7,7 @@
   "author": "demo",
   "entry": "CHARACTER.md",
   "index": "INDEX.md",
-  "avatar": "avatar/default.svg",
+  "avatar": "avatar/custom.png",
   "voice": "voice/voice.json",
   "license_id": "fan_character_profile"
 }
