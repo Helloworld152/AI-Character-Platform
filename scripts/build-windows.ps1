@@ -110,12 +110,46 @@ Run-Step "Build Python backend exe" {
 }
 
 Run-Step "Build Windows installer" {
-    npx electron-builder --win nsis --publish never
-    $Installer = Get-ChildItem "release" -Filter "*.exe" -File | Select-Object -First 1
-    if (-not $Installer) {
-        throw "Windows installer was not generated in release\."
+    npx electron-builder --win nsis portable --publish never
+
+    $Version = node -p "require('./package.json').version"
+    $Setup = Get-ChildItem "release" -Filter "*Setup*.exe" -File | Select-Object -First 1
+    $Portable = Get-ChildItem "release" -Filter "*.exe" -File | Where-Object { $_.Name -notlike "*Setup*" } | Select-Object -First 1
+
+    if (-not $Setup) {
+        throw "Windows setup installer was not generated in release\."
     }
-    Write-Host "Generated installer: $($Installer.FullName)"
+    if (-not $Portable) {
+        throw "Windows portable package was not generated in release\."
+    }
+
+    $SetupTarget = "AI-Character-Platform-Setup-$Version.exe"
+    $PortableTarget = "AI-Character-Platform-Portable-$Version.exe"
+
+    if ($Setup.Name -ne $SetupTarget) {
+        Rename-Item $Setup.FullName $SetupTarget
+        $Setup = Get-Item (Join-Path "release" $SetupTarget)
+    }
+    if ($Portable.Name -ne $PortableTarget) {
+        Rename-Item $Portable.FullName $PortableTarget
+        $Portable = Get-Item (Join-Path "release" $PortableTarget)
+    }
+
+    $SetupBlockmap = Join-Path "release" "$($Setup.BaseName).exe.blockmap"
+    if (Test-Path $SetupBlockmap) {
+        Rename-Item $SetupBlockmap "$SetupTarget.blockmap"
+    }
+
+    $LatestYml = Join-Path "release" "latest.yml"
+    if (Test-Path $LatestYml) {
+        $content = Get-Content $LatestYml -Raw
+        $content = $content -replace '(?m)^path: .+$', "path: $SetupTarget"
+        $content = $content -replace '(?m)^(\s*- url: ).+$', "`$1$SetupTarget"
+        Set-Content $LatestYml $content -NoNewline
+    }
+
+    Write-Host "Generated setup: $($Setup.FullName)"
+    Write-Host "Generated portable: $($Portable.FullName)"
 }
 
 Write-Host ""

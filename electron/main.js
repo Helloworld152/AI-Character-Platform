@@ -233,12 +233,17 @@ async function createWindow() {
     minHeight: 680,
     title: "AI Character Platform",
     backgroundColor: "#eef2ee",
+    autoHideMenuBar: process.platform === "win32",
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, "preload.js"),
     },
   });
+
+  if (process.platform === "win32") {
+    mainWindow.setMenuBarVisibility(false);
+  }
 
   await mainWindow.loadURL(rendererUrl);
 }

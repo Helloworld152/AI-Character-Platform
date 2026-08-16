@@ -99,6 +99,34 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
         run: |
           npx electron-builder --win nsis portable --publish never
+          $Version = node -p "require('./package.json').version"
+          $Setup = Get-ChildItem "release" -Filter "*Setup*.exe" -File | Select-Object -First 1
+          $Portable = Get-ChildItem "release" -Filter "*.exe" -File | Where-Object { $_.Name -notlike "*Setup*" } | Select-Object -First 1
+          if (-not $Setup) {
+            throw "Windows setup installer was not generated in release\."
+          }
+          if (-not $Portable) {
+            throw "Windows portable package was not generated in release\."
+          }
+          $SetupTarget = "AI-Character-Platform-Setup-$Version.exe"
+          $PortableTarget = "AI-Character-Platform-Portable-$Version.exe"
+          if ($Setup.Name -ne $SetupTarget) {
+            Rename-Item $Setup.FullName $SetupTarget
+          }
+          if ($Portable.Name -ne $PortableTarget) {
+            Rename-Item $Portable.FullName $PortableTarget
+          }
+          $SetupBlockmap = Join-Path "release" "$($Setup.BaseName).exe.blockmap"
+          if (Test-Path $SetupBlockmap) {
+            Rename-Item $SetupBlockmap "$SetupTarget.blockmap"
+          }
+          $LatestYml = Join-Path "release" "latest.yml"
+          if (Test-Path $LatestYml) {
+            $content = Get-Content $LatestYml -Raw
+            $content = $content -replace '(?m)^path: .+$', "path: $SetupTarget"
+            $content = $content -replace '(?m)^(\s*- url: ).+$', "`$1$SetupTarget"
+            Set-Content $LatestYml $content -NoNewline
+          }
           Get-ChildItem release -Recurse
 
       - name: Upload Windows artifact
