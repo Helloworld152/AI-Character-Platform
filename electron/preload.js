@@ -10,3 +10,7 @@ contextBridge.exposeInMainWorld("aiCharacterUpdater", {
     return () => ipcRenderer.removeListener("updater:status", listener);
   },
 });
+
+contextBridge.exposeInMainWorld("aiCharacterDesktop", {
+  openCharacterDirectory: (characterId) => ipcRenderer.invoke("character:open-directory", characterId),
+});

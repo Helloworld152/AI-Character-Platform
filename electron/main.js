@@ -1,6 +1,7 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, shell } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const { spawn } = require("child_process");
+const fs = require("fs");
 const http = require("http");
 const path = require("path");
 
@@ -16,6 +17,7 @@ const dataRoot = app.getPath("userData");
 const packagedBackend = process.platform === "win32"
   ? path.join(process.resourcesPath, "backend", "backend.exe")
   : null;
+const CHARACTER_ID_RE = /^[a-zA-Z0-9][a-zA-Z0-9_-]{1,79}$/;
 
 let backend = null;
 let backendPid = null;
@@ -95,6 +97,21 @@ function setupUpdaterIpc() {
     await stopBackend();
     autoUpdater.quitAndInstall(false, true);
     return { state: "installing" };
+  });
+
+  ipcMain.handle("character:open-directory", async (_event, characterId) => {
+    const normalizedId = String(characterId || "").trim();
+    if (!CHARACTER_ID_RE.test(normalizedId)) {
+      throw new Error("无效的角色 id");
+    }
+
+    const target = path.join(dataRoot, "characters", normalizedId);
+    if (!fs.existsSync(target)) {
+      throw new Error(`角色目录不存在: ${target}`);
+    }
+
+    shell.showItemInFolder(target);
+    return { opened: true, path: target };
   });
 }
 

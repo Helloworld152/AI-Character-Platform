@@ -102,6 +102,7 @@ function App() {
   const [memoryLoading, setMemoryLoading] = useState(false);
   const [characterImporting, setCharacterImporting] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [openingCharacterDirectory, setOpeningCharacterDirectory] = useState(false);
   const [updaterStatus, setUpdaterStatus] = useState(null);
   const [updaterBusy, setUpdaterBusy] = useState(false);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
@@ -114,6 +115,7 @@ function App() {
   const [deletingMemoryId, setDeletingMemoryId] = useState(null);
   const messageListRef = useRef(null);
   const updater = window.aiCharacterUpdater;
+  const desktop = window.aiCharacterDesktop;
 
   useEffect(() => {
     boot();
@@ -476,6 +478,26 @@ function App() {
     }
   }
 
+  async function openCharacterDirectory() {
+    if (!activeCharacterId || openingCharacterDirectory) {
+      return;
+    }
+    if (!desktop) {
+      setStatus("当前环境不支持打开角色目录");
+      return;
+    }
+
+    setOpeningCharacterDirectory(true);
+    try {
+      await desktop.openCharacterDirectory(activeCharacterId);
+      setStatus("已打开角色目录");
+    } catch (error) {
+      setStatus(error.message || "打开角色目录失败");
+    } finally {
+      setOpeningCharacterDirectory(false);
+    }
+  }
+
   return (
     <main className={`app-shell ${leftCollapsed ? "left-collapsed" : ""} ${settingsOpen ? "settings-open" : ""} ${importOpen ? "import-open" : ""}`}>
       <aside className="rail">
@@ -575,6 +597,17 @@ function App() {
             </div>
           </div>
           <div className="header-actions">
+            {activeCharacter && (
+              <button
+                className="ghost-button"
+                disabled={!desktop || openingCharacterDirectory}
+                onClick={openCharacterDirectory}
+                title={desktop ? "打开当前角色目录" : "当前环境不支持打开角色目录"}
+                type="button"
+              >
+                {openingCharacterDirectory ? "打开中" : "修改角色"}
+              </button>
+            )}
             <span className="status">{status}</span>
           </div>
         </header>

@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build-macos:
-    name: Build macOS DMG
+    name: Build macOS release assets
     runs-on: macos-14
 
     steps:
@@ -33,13 +33,17 @@ jobs:
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
-          name: macos-dmg
+          name: macos-release
           path: |
             release/*.dmg
+            release/*.dmg.blockmap
+            release/*-mac.zip
+            release/*-mac.zip.blockmap
+            release/latest-mac.yml
           if-no-files-found: error
 
   build-windows:
-    name: Build Windows installer
+    name: Build Windows release assets
     runs-on: windows-2022
 
     steps:
@@ -89,21 +93,22 @@ jobs:
             throw "dist\backend\backend.exe was not generated."
           }
 
-      - name: Build Windows installer
+      - name: Build Windows release assets
         shell: pwsh
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
         run: |
-          npx electron-builder --win nsis --publish never
+          npx electron-builder --win nsis portable --publish never
           Get-ChildItem release -Recurse
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: windows-installer
+          name: windows-release
           path: |
             release/*.exe
             release/*.exe.blockmap
+            release/latest.yml
           if-no-files-found: error
 
   publish-release:
