@@ -240,6 +240,8 @@ macOS DMG + ZIP：
 npm run dist:dmg
 ```
 
+以上 macOS 打包命令默认只生成本地产物，不会自动发布到 GitHub Releases。
+
 Windows 安装版 + 便携版：
 
 ```powershell

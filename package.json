@@ -1,6 +1,6 @@
 {
   "name": "ai-character-platform",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "description": "AI Character Platform desktop client",
   "repository": {
@@ -14,8 +14,8 @@
     "build:web": "vite build",
     "electron": "electron .",
     "start": "electron .",
-    "dist": "npm run build:web && electron-builder --mac",
-    "dist:dmg": "npm run build:web && electron-builder --mac dmg zip",
+    "dist": "npm run build:web && electron-builder --mac --publish never",
+    "dist:dmg": "npm run build:web && electron-builder --mac dmg zip --publish never",
     "dist:win": "powershell -ExecutionPolicy Bypass -File scripts/build-windows.ps1",
     "dist:win:portable": "npm run build:web && electron-builder --win portable"
   },
