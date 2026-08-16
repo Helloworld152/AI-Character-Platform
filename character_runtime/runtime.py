@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import os
 from pathlib import Path
 import shutil
@@ -34,6 +35,7 @@ def create_runtime(root: Path | None = None, data_root: Path | None = None) -> R
     data_dir.mkdir(parents=True, exist_ok=True)
     load_dotenv(data_dir / ".env")
     _seed_bundled_characters(app_root / "characters", data_dir / "characters")
+    _normalize_character_directories(data_dir / "characters")
 
     character_manager = CharacterManager(data_dir / "characters")
     character_manager.load_all()
@@ -76,5 +78,48 @@ def _seed_bundled_characters(source_root: Path, destination_root: Path) -> None:
         return
 
     for child in sorted(source_root.iterdir()):
-        if child.is_dir():
-            shutil.copytree(child, destination_root / child.name)
+        if not child.is_dir():
+            continue
+
+        manifest_path = child / "manifest.json"
+        if not manifest_path.is_file():
+            continue
+
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+
+        character_id = str(manifest.get("id", "")).strip()
+        if not character_id:
+            continue
+
+        shutil.copytree(child, destination_root / character_id)
+
+
+def _normalize_character_directories(characters_root: Path) -> None:
+    if not characters_root.exists():
+        return
+
+    for child in sorted(characters_root.iterdir()):
+        if not child.is_dir():
+            continue
+
+        manifest_path = child / "manifest.json"
+        if not manifest_path.is_file():
+            continue
+
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+
+        character_id = str(manifest.get("id", "")).strip()
+        if not character_id or child.name == character_id:
+            continue
+
+        destination = characters_root / character_id
+        if destination.exists():
+            continue
+
+        child.replace(destination)
