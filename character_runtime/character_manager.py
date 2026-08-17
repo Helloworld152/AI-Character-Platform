@@ -65,6 +65,25 @@ class CharacterManager:
             return None
         return self._characters[self._active_character_id]
 
+    def delete_character(self, character_id: str) -> Character:
+        if character_id not in self._characters:
+            raise KeyError(f"未知角色: {character_id}")
+
+        character = self._characters[character_id]
+        root = character.root.resolve()
+        characters_root = self._characters_root.resolve()
+        if root.parent != characters_root or root.name != character_id:
+            raise CharacterPackageError("角色目录不安全，已取消删除")
+
+        shutil.rmtree(root)
+        del self._characters[character_id]
+        if self._active_character_id == character_id:
+            self._active_character_id = next(iter(self._characters), None)
+        if not self._characters:
+            self._characters_root.mkdir(parents=True, exist_ok=True)
+            (self._characters_root / ".no-auto-seed").touch()
+        return character
+
     def import_package(self, package_path: Path) -> Character:
         if not package_path.is_file():
             raise CharacterPackageError("角色包文件不存在")

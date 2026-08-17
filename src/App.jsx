@@ -112,7 +112,12 @@ function App() {
   const [importDraft, setImportDraft] = useState(initialImportDraft);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState("model");
+  const [diaryOpen, setDiaryOpen] = useState(false);
+  const [expandedMemoryId, setExpandedMemoryId] = useState(null);
   const [deletingMemoryId, setDeletingMemoryId] = useState(null);
+  const [deleteCharacterOpen, setDeleteCharacterOpen] = useState(false);
+  const [deleteCharacterConfirmOpen, setDeleteCharacterConfirmOpen] = useState(false);
+  const [deletingCharacter, setDeletingCharacter] = useState(false);
   const messageListRef = useRef(null);
   const updater = window.aiCharacterUpdater;
   const desktop = window.aiCharacterDesktop;
@@ -143,10 +148,10 @@ function App() {
   }, [messages]);
 
   useEffect(() => {
-    if (settingsOpen && settingsTab === "memory") {
+    if (diaryOpen) {
       loadMemories();
     }
-  }, [settingsOpen, settingsTab, activeCharacterId]);
+  }, [diaryOpen, activeCharacterId]);
 
   async function boot() {
     try {
@@ -168,6 +173,7 @@ function App() {
   async function loadMessages() {
     const payload = await requestJson("/api/messages?limit=30");
     if (!payload.character) {
+      setActiveCharacter(null);
       setMessages([]);
       return;
     }
@@ -192,6 +198,51 @@ function App() {
       setStatus(error.message);
     } finally {
       setMemoryLoading(false);
+    }
+  }
+
+  function openDiary() {
+    setSettingsOpen(false);
+    setImportOpen(false);
+    setExpandedMemoryId(null);
+    setDiaryOpen(true);
+  }
+
+  function closeDiary() {
+    setDiaryOpen(false);
+    setExpandedMemoryId(null);
+  }
+
+  function openDeleteCharacter() {
+    setDiaryOpen(false);
+    setDeleteCharacterOpen(true);
+  }
+
+  function continueDeleteCharacter() {
+    setDeleteCharacterOpen(false);
+    setDeleteCharacterConfirmOpen(true);
+  }
+
+  async function deleteCharacter() {
+    if (!activeCharacter || deletingCharacter) {
+      return;
+    }
+    setDeletingCharacter(true);
+    setStatus("删除角色");
+    try {
+      await requestJson("/api/characters/delete", {
+        method: "POST",
+        body: JSON.stringify({ character_id: activeCharacter.id }),
+      });
+      setDeleteCharacterConfirmOpen(false);
+      setMemories([]);
+      await loadCharacters();
+      await loadMessages();
+      setStatus("角色已删除");
+    } catch (error) {
+      setStatus(error.message);
+    } finally {
+      setDeletingCharacter(false);
     }
   }
 
@@ -499,7 +550,7 @@ function App() {
   }
 
   return (
-    <main className={`app-shell ${leftCollapsed ? "left-collapsed" : ""} ${settingsOpen ? "settings-open" : ""} ${importOpen ? "import-open" : ""}`}>
+    <main className={`app-shell ${leftCollapsed ? "left-collapsed" : ""} ${settingsOpen ? "settings-open" : ""} ${importOpen ? "import-open" : ""} ${diaryOpen ? "diary-open" : ""}`}>
       <aside className="rail">
         <div className="brand">
           <div className="brand-mark">ACP</div>
@@ -599,14 +650,50 @@ function App() {
           <div className="header-actions">
             {activeCharacter && (
               <button
-                className="ghost-button"
+                aria-label={openingCharacterDirectory ? "正在打开角色目录" : "修改当前角色"}
+                className="icon-button"
                 disabled={!desktop || openingCharacterDirectory}
                 onClick={openCharacterDirectory}
                 title={desktop ? "打开当前角色目录" : "当前环境不支持打开角色目录"}
                 type="button"
               >
-                {openingCharacterDirectory ? "打开中" : "修改角色"}
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M4 20h4.5L19 9.5 14.5 5 4 15.5V20Z" />
+                  <path d="M13 6.5 17.5 11" />
+                  <path d="M4 15.5 8.5 20" />
+                </svg>
+                <span className="sr-only">{openingCharacterDirectory ? "打开中" : "修改角色"}</span>
               </button>
+            )}
+            {activeCharacter && (
+              <>
+                <button
+                  aria-label="打开角色日记"
+                  className={`icon-button ${diaryOpen ? "active" : ""}`}
+                  onClick={openDiary}
+                  title="角色日记"
+                  type="button"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M6 3.5h10.5A2.5 2.5 0 0 1 19 6v14.5H8.5A2.5 2.5 0 0 1 6 18V3.5Z" />
+                    <path d="M6 6H4.5v12A2.5 2.5 0 0 0 7 20.5h12" />
+                    <path d="M10 8h5M10 11.5h5M10 15h3" />
+                  </svg>
+                  <span className="sr-only">角色日记</span>
+                </button>
+                <button
+                  aria-label="删除当前角色"
+                  className="icon-button danger-icon"
+                  onClick={openDeleteCharacter}
+                  title="删除当前角色"
+                  type="button"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M5 7h14M10 4h4l1 3H9l1-3ZM8 7l.8 13h6.4L16 7M10.5 10.5v6M13.5 10.5v6" />
+                  </svg>
+                  <span className="sr-only">删除当前角色</span>
+                </button>
+              </>
             )}
             <span className="status">{status}</span>
           </div>
@@ -660,6 +747,76 @@ function App() {
           <div className="composer-placeholder">选择角色后可开始聊天</div>
         )}
       </section>
+
+      <aside className="diary-pane">
+        <div className="diary-backdrop" onClick={closeDiary} />
+        <section aria-label="角色日记" className="diary-window" role="dialog">
+          <div className="settings-head">
+            <div>
+              <div className="section-title">角色日记</div>
+              <p>{activeCharacter ? `当前：${activeCharacter.display_name}` : "未选择角色"}</p>
+            </div>
+            <button className="ghost-button" onClick={closeDiary} type="button">收起</button>
+          </div>
+          <div className="diary-body">
+            <div className="memory-head">
+              <p>这里记录角色对你们相处细节的感受。</p>
+              <button className="ghost-button" disabled={memoryLoading} onClick={loadMemories} type="button">
+                {memoryLoading ? "刷新中" : "刷新"}
+              </button>
+            </div>
+            <div className="memory-list">
+              {memories.length === 0 ? (
+                <div className="memory-empty">还没有角色日记。多聊几轮后，角色会逐步记下重要的相处细节。</div>
+              ) : (
+                memories.map((memory) => (
+                  <article className="memory-card" key={memory.id}>
+                    <div className="memory-meta">
+                      <span>{memory.type_label}</span>
+                      <time>{formatMessageTime(memory.created_at)}</time>
+                    </div>
+                    {memory.character_display_name && <small>{memory.character_display_name}</small>}
+                    <p>{memory.content}</p>
+                    <div className="memory-actions">
+                      <button
+                        aria-expanded={expandedMemoryId === memory.id}
+                        className="memory-link"
+                        onClick={() => setExpandedMemoryId((current) => current === memory.id ? null : memory.id)}
+                        type="button"
+                      >
+                        {expandedMemoryId === memory.id ? "收起关联记忆" : "关联记忆"}
+                      </button>
+                      <button
+                        aria-label="删除这条角色日记"
+                        className="icon-button danger-icon memory-delete"
+                        disabled={deletingMemoryId === memory.id}
+                        onClick={() => deleteMemory(memory.id)}
+                        title="删除这条角色日记"
+                        type="button"
+                      >
+                        <svg aria-hidden="true" viewBox="0 0 24 24">
+                          <path d="M3 6h18" />
+                          <path d="M8 6V4h8v2" />
+                          <path d="M6.5 6l1 14h9l1-14" />
+                          <path d="M10 10v6" />
+                          <path d="M14 10v6" />
+                        </svg>
+                        <span className="sr-only">{deletingMemoryId === memory.id ? "删除中" : "删除"}</span>
+                      </button>
+                    </div>
+                    {expandedMemoryId === memory.id && (
+                      <div className="memory-fact">
+                        <span>客观事实</span>
+                        <p>{memory.fact_content || "这条日记暂无关联事实。"}</p>
+                      </div>
+                    )}
+                  </article>
+                ))
+              )}
+            </div>
+          </div>
+        </section>
+      </aside>
 
       <aside className="import-pane">
         <div className="import-backdrop" onClick={closeImportModal} />
@@ -835,7 +992,6 @@ function App() {
             <div className="settings-tabs">
               {[
                 ["model", "模型设置"],
-                ["memory", "记忆"],
                 ["update", "更新"],
               ].map(([key, label]) => (
                 <button
@@ -911,46 +1067,6 @@ function App() {
                 </form>
               )}
 
-              {settingsTab === "memory" && (
-                <section className="settings-panel memory-panel">
-              <div className="memory-head">
-                <div>
-                  <strong>记忆库</strong>
-                  <p>{activeCharacter ? `当前：${activeCharacter.display_name}` : "未选择角色，显示全部记忆"}</p>
-                </div>
-                <button className="ghost-button" disabled={memoryLoading} onClick={loadMemories} type="button">
-                  {memoryLoading ? "刷新中" : "刷新"}
-                </button>
-              </div>
-              <div className="memory-list">
-                {memories.length === 0 ? (
-                  <div className="memory-empty">还没有提取到记忆。多聊几轮后，小模型会逐步沉淀重要信息。</div>
-                ) : (
-                  memories.map((memory) => (
-                    <article className="memory-card" key={memory.id}>
-                      <div className="memory-meta">
-                        <span>{memory.type_label}</span>
-                        <time>{formatMessageTime(memory.created_at)}</time>
-                      </div>
-                      {memory.character_display_name && (
-                        <small>{memory.character_display_name}</small>
-                      )}
-                      <p>{memory.content}</p>
-                      <button
-                        className="memory-delete"
-                        disabled={deletingMemoryId === memory.id}
-                        onClick={() => deleteMemory(memory.id)}
-                        type="button"
-                      >
-                        {deletingMemoryId === memory.id ? "删除中" : "删除"}
-                      </button>
-                    </article>
-                  ))
-                )}
-              </div>
-                </section>
-              )}
-
               {settingsTab === "update" && (
                 <section className="settings-panel update-panel">
               <div className="memory-head">
@@ -991,6 +1107,38 @@ function App() {
           </div>
         </div>
       </aside>
+
+      {deleteCharacterOpen && (
+        <div className="confirm-layer">
+          <div className="confirm-backdrop" onClick={() => setDeleteCharacterOpen(false)} />
+          <section aria-label="删除角色提醒" className="confirm-dialog" role="dialog">
+            <div className="confirm-icon danger-icon">!</div>
+            <h3>删除角色</h3>
+            <p>删除“{activeCharacter?.display_name}”后，该角色的聊天记录和角色日记都会被删除，无法恢复。</p>
+            <div className="confirm-actions">
+              <button className="ghost-button" onClick={() => setDeleteCharacterOpen(false)} type="button">取消</button>
+              <button className="danger-button" onClick={continueDeleteCharacter} type="button">继续删除</button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {deleteCharacterConfirmOpen && (
+        <div className="confirm-layer">
+          <div className="confirm-backdrop" onClick={() => setDeleteCharacterConfirmOpen(false)} />
+          <section aria-label="确认删除角色" className="confirm-dialog" role="dialog">
+            <div className="confirm-icon danger-icon">!</div>
+            <h3>最后确认</h3>
+            <p>确定永久删除“{activeCharacter?.display_name}”吗？聊天记录、角色日记和关联事实都会一起删除。</p>
+            <div className="confirm-actions">
+              <button className="ghost-button" disabled={deletingCharacter} onClick={() => setDeleteCharacterConfirmOpen(false)} type="button">取消</button>
+              <button className="danger-button" disabled={deletingCharacter} onClick={deleteCharacter} type="button">
+                {deletingCharacter ? "删除中" : "永久删除"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

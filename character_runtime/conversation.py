@@ -48,17 +48,24 @@ class ConversationEngine:
         if self._memory_extractor is None:
             return
         try:
+            existing_facts = self._memory.list_character_memory_facts(
+                self._user_id,
+                character.id,
+                limit=100,
+            )
             extracted = self._memory_extractor.extract(
                 user_message=user_message,
                 assistant_message=response,
                 character_name=character.display_name,
+                existing_facts=existing_facts,
             )
             if extracted is None:
                 return
             self._memory.write_character_memory(
                 user_id=self._user_id,
                 character_id=character.id,
-                content=extracted["memory"],
+                fact_content=extracted["fact"],
+                diary_content=extracted["diary"],
                 importance=extracted["importance"],
             )
         except Exception as error:

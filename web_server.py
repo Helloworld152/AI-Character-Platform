@@ -91,6 +91,9 @@ class WebHandler(BaseHTTPRequestHandler):
             if path == "/api/memories/delete":
                 self._handle_delete_memory()
                 return
+            if path == "/api/characters/delete":
+                self._handle_delete_character()
+                return
             if path == "/api/characters/import":
                 self._handle_import_character()
                 return
@@ -244,6 +247,34 @@ class WebHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "记忆不存在或无权删除"}, status=404)
             return
         self._send_json({"deleted": True, "memory_id": memory_id})
+
+    def _handle_delete_character(self) -> None:
+        payload = self._read_json()
+        character_id = str(payload.get("character_id", "")).strip()
+        if not character_id:
+            self._send_json({"error": "character_id is required"}, status=400)
+            return
+
+        with RUNTIME_LOCK:
+            character = next(
+                (item for item in RUNTIME.character_manager.list_characters() if item.id == character_id),
+                None,
+            )
+            if character is None:
+                self._send_json({"error": "未知角色"}, status=404)
+                return
+            deleted = RUNTIME.character_manager.delete_character(character_id)
+            counts = RUNTIME.database.delete_character_data("local_user", character_id)
+            active = RUNTIME.character_manager.active_or_none()
+
+        self._send_json(
+            {
+                "deleted": True,
+                "character_id": deleted.id,
+                "active_character_id": active.id if active else None,
+                "counts": counts,
+            }
+        )
 
     def _handle_import_character(self) -> None:
         try:
@@ -617,7 +648,7 @@ def _memory_record(memory: dict) -> dict:
     return {
         **memory,
         "scope": "global" if memory["character_id"] is None else "character",
-        "type_label": "全局记忆" if memory_type == 0 else "角色记忆",
+        "type_label": "全局记忆" if memory_type == 0 else "角色日记",
     }
 
 

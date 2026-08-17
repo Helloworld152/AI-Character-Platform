@@ -120,14 +120,17 @@ class Database:
         memory_type: int,
         content: str,
         importance: float = 0.0,
+        fact_content: str | None = None,
     ) -> int:
         now = int(time.time())
         cursor = self._connection.execute(
             """
-            INSERT INTO memories (user_id, character_id, type, content, importance, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO memories (
+                user_id, character_id, type, content, fact_content, importance, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (user_id, character_id, memory_type, content, importance, now),
+            (user_id, character_id, memory_type, content, fact_content, importance, now),
         )
         self._connection.commit()
         return int(cursor.lastrowid)
@@ -142,16 +145,37 @@ class Database:
         like = f"%{query}%"
         rows = self._connection.execute(
             """
-            SELECT content FROM memories
+            SELECT COALESCE(fact_content, content) AS content FROM memories
             WHERE user_id = ?
               AND (character_id IS NULL OR character_id = ?)
-              AND content LIKE ?
+              AND (content LIKE ? OR fact_content LIKE ?)
             ORDER BY importance DESC, created_at DESC
             LIMIT ?
             """,
-            (user_id, character_id, like, limit),
+            (user_id, character_id, like, like, limit),
         ).fetchall()
         return [row["content"] for row in rows]
+
+    def list_memory_facts(
+        self,
+        user_id: str,
+        character_id: str,
+        memory_type: int,
+        limit: int = 100,
+    ) -> list[str]:
+        rows = self._connection.execute(
+            """
+            SELECT COALESCE(fact_content, content) AS fact
+            FROM memories
+            WHERE user_id = ?
+              AND type = ?
+              AND (character_id IS NULL OR character_id = ?)
+            ORDER BY importance DESC, created_at DESC
+            LIMIT ?
+            """,
+            (user_id, memory_type, character_id, limit),
+        ).fetchall()
+        return [row["fact"] for row in rows]
 
     def list_memories(
         self,
@@ -167,6 +191,7 @@ class Database:
                        characters.display_name AS character_display_name,
                        memories.type,
                        memories.content,
+                       memories.fact_content,
                        memories.importance,
                        memories.created_at
                 FROM memories
@@ -186,6 +211,7 @@ class Database:
                        characters.display_name AS character_display_name,
                        memories.type,
                        memories.content,
+                       memories.fact_content,
                        memories.importance,
                        memories.created_at
                 FROM memories
@@ -204,6 +230,7 @@ class Database:
                 "character_display_name": row["character_display_name"],
                 "type": int(row["type"]),
                 "content": row["content"],
+                "fact_content": row["fact_content"] or row["content"],
                 "importance": float(row["importance"]),
                 "created_at": int(row["created_at"]),
             }
@@ -220,6 +247,55 @@ class Database:
         )
         self._connection.commit()
         return cursor.rowcount > 0
+
+    def delete_character_data(self, user_id: str, character_id: str) -> dict[str, int]:
+        session_rows = self._connection.execute(
+            """
+            SELECT id FROM sessions
+            WHERE user_id = ? AND character_id = ?
+            """,
+            (user_id, character_id),
+        ).fetchall()
+        session_ids = [int(row["id"]) for row in session_rows]
+
+        deleted_messages = 0
+        if session_ids:
+            placeholders = ",".join("?" for _ in session_ids)
+            cursor = self._connection.execute(
+                f"DELETE FROM messages WHERE session_id IN ({placeholders})",
+                session_ids,
+            )
+            deleted_messages = cursor.rowcount
+
+        cursor = self._connection.execute(
+            """
+            DELETE FROM sessions
+            WHERE user_id = ? AND character_id = ?
+            """,
+            (user_id, character_id),
+        )
+        deleted_sessions = cursor.rowcount
+
+        cursor = self._connection.execute(
+            """
+            DELETE FROM memories
+            WHERE user_id = ? AND character_id = ?
+            """,
+            (user_id, character_id),
+        )
+        deleted_memories = cursor.rowcount
+
+        self._connection.execute("DELETE FROM installed_packs WHERE character_id = ?", (character_id,))
+        self._connection.execute("DELETE FROM licenses WHERE character_id = ?", (character_id,))
+        cursor = self._connection.execute("DELETE FROM characters WHERE id = ?", (character_id,))
+        deleted_characters = cursor.rowcount
+        self._connection.commit()
+        return {
+            "characters": deleted_characters,
+            "sessions": deleted_sessions,
+            "messages": deleted_messages,
+            "memories": deleted_memories,
+        }
 
     def _migrate(self) -> None:
         self._connection.executescript(
@@ -276,6 +352,7 @@ class Database:
                 character_id TEXT,
                 type INTEGER NOT NULL,
                 content TEXT NOT NULL,
+                fact_content TEXT,
                 importance REAL DEFAULT 0,
                 created_at INTEGER NOT NULL,
                 FOREIGN KEY(user_id) REFERENCES users(id),
@@ -293,4 +370,10 @@ class Database:
             );
             """
         )
+        columns = {
+            row["name"]
+            for row in self._connection.execute("PRAGMA table_info(memories)").fetchall()
+        }
+        if "fact_content" not in columns:
+            self._connection.execute("ALTER TABLE memories ADD COLUMN fact_content TEXT")
         self._connection.commit()
