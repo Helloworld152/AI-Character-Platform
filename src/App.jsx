@@ -5,6 +5,34 @@ import { GalgameView } from "./galgame/GalgameView.jsx";
 import { toPlayScript } from "./galgame/adapter.js";
 import { ChoicePanel } from "./galgame/ChoicePanel.jsx";
 
+// 打字机文本：新回复逐字显示，点击跳过，变化时通知滚动
+function TypewriterText({ text, skip = false, speed = 25, onProgress }) {
+  const [count, setCount] = useState(text.length);
+
+  useEffect(() => {
+    setCount(skip ? text.length : 0);
+  }, [text, skip]);
+
+  useEffect(() => {
+    if (skip || count >= text.length) {
+      return undefined;
+    }
+    const timer = setTimeout(() => setCount((value) => value + 1), speed);
+    return () => clearTimeout(timer);
+  }, [count, skip, text]);
+
+  useEffect(() => {
+    onProgress?.();
+  }, [count]);
+
+  return (
+    <>
+      {text.slice(0, count)}
+      {count < text.length && <span className="typing-caret" />}
+    </>
+  );
+}
+
 const initialSettings = {
   api_key_configured: false,
   api_key_preview: "",
@@ -125,6 +153,7 @@ function App() {
   const [portraitUploading, setPortraitUploading] = useState(false);
   const [pendingChoice, setPendingChoice] = useState(null);
   const [choiceBusy, setChoiceBusy] = useState(false);
+  const [skipTypingId, setSkipTypingId] = useState(null);
   const messageListRef = useRef(null);
   const updater = window.aiCharacterUpdater;
   const desktop = window.aiCharacterDesktop;
@@ -853,14 +882,41 @@ function App() {
             {messages.length === 0 ? (
               <div className="empty-state">还没有聊天记录。发一句话开始这段会话。</div>
             ) : (
-              messages.map((message) => (
-                <article className={`bubble ${message.role}`} key={message.id}>
-                  <div className="bubble-content">{message.content}</div>
-                  {message.role !== "system" && (
-                    <time>{formatMessageTime(message.created_at)}</time>
-                  )}
-                </article>
-              ))
+              messages.map((message) => {
+                // 仅对本次会话新生成的回复（本地 id）启用打字机，历史消息直接显示
+                const isTyping =
+                  message.role === "assistant" &&
+                  typeof message.id === "string" &&
+                  message.id.startsWith("assistant-");
+                return (
+                  <article
+                    className={`bubble ${message.role}${isTyping ? " typing" : ""}`}
+                    key={message.id}
+                    onClick={isTyping ? () => setSkipTypingId(message.id) : undefined}
+                    title={isTyping ? "点击跳过打字" : undefined}
+                  >
+                    <div className="bubble-content">
+                      {isTyping ? (
+                        <TypewriterText
+                          onProgress={() => {
+                            const node = messageListRef.current;
+                            if (node) {
+                              node.scrollTop = node.scrollHeight;
+                            }
+                          }}
+                          skip={skipTypingId === message.id}
+                          text={message.content}
+                        />
+                      ) : (
+                        message.content
+                      )}
+                    </div>
+                    {message.role !== "system" && (
+                      <time>{formatMessageTime(message.created_at)}</time>
+                    )}
+                  </article>
+                );
+              })
             )}
             {pendingForActive && (
               <div className="choice-slot">

@@ -31,6 +31,7 @@ export function GalgameView({
 
   const displayName = character?.display_name || "角色";
   const portraitUrl = character?.portrait_url || null;
+  const avatarUrl = character?.avatar_url || null;
 
   const handleSend = (event) => {
     event.preventDefault();
@@ -80,24 +81,29 @@ export function GalgameView({
       </div>
 
       <div className="gg-stage">
-        {!hasScript ? (
+        <Stage
+          avatarUrl={avatarUrl}
+          portraitUrl={portraitUrl}
+          speaking={settings.bounce}
+          thinking={thinking}
+        />
+        {!hasScript && (
           <div className="gg-empty">
             <strong>演出尚未开始</strong>
             <p>去「聊天」界面和角色说一句话，再回到这里欣赏演出。立绘可以在上方上传。</p>
           </div>
-        ) : (
-          <>
-            <Stage portraitUrl={portraitUrl} speaking={settings.bounce} thinking={thinking} />
-            {pendingChoice && (
-              <ChoicePanel
-                busy={choiceBusy}
-                choice={pendingChoice}
-                onAnswer={onAnswerChoice}
-                onCancel={onCancelChoice}
-                variant="stage"
-              />
-            )}
-            <div className="gg-stage-overlay">
+        )}
+        {pendingChoice && (
+          <ChoicePanel
+            busy={choiceBusy}
+            choice={pendingChoice}
+            onAnswer={onAnswerChoice}
+            onCancel={onCancelChoice}
+            variant="stage"
+          />
+        )}
+        {hasScript && (
+          <div className="gg-stage-overlay">
               <DialogueBox
                 autoAdvanceMs={settings.autoAdvanceMs}
                 autoMode={autoMode}
@@ -127,7 +133,6 @@ export function GalgameView({
                 </div>
               </form>
             </div>
-          </>
         )}
       </div>
 

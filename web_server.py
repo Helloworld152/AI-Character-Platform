@@ -169,6 +169,7 @@ class WebHandler(BaseHTTPRequestHandler):
                     "id": character.id,
                     "display_name": character.display_name,
                     "avatar_url": self._avatar_url(character),
+                    "portrait_url": self._portrait_url(character),
                 },
                 "pending_choice": pending_choice,
             }
@@ -211,6 +212,7 @@ class WebHandler(BaseHTTPRequestHandler):
                     "id": character.id,
                     "display_name": character.display_name,
                     "avatar_url": self._avatar_url(character),
+                    "portrait_url": self._portrait_url(character),
                 },
             }
         )
@@ -230,6 +232,7 @@ class WebHandler(BaseHTTPRequestHandler):
                     "id": character.id,
                     "display_name": character.display_name,
                     "avatar_url": self._avatar_url(character),
+                    "portrait_url": self._portrait_url(character),
                 },
                 "messages": messages,
             }
@@ -396,6 +399,7 @@ class WebHandler(BaseHTTPRequestHandler):
                         "version": character.manifest.version,
                         "author": character.manifest.author,
                         "avatar_url": self._avatar_url(character),
+                        "portrait_url": self._portrait_url(character),
                         "active": True,
                     }
                 }
@@ -472,6 +476,8 @@ class WebHandler(BaseHTTPRequestHandler):
                     "id": updated.id,
                     "display_name": updated.display_name,
                     "avatar_url": self._avatar_url(updated),
+                    "avatar_url": self._avatar_url(updated),
+                    "portrait_url": self._portrait_url(updated),
                 }
             }
         )

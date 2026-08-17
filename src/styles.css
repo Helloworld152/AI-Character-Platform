@@ -1458,3 +1458,28 @@ form.settings-panel {
 .choice-slot {
   margin: 14px 22px 0;
 }
+
+/* 打字机光标 */
+.typing-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -0.15em;
+  background: var(--accent);
+  animation: typingCaret 0.9s step-end infinite;
+}
+
+@keyframes typingCaret {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+.bubble.typing {
+  cursor: pointer;
+}
