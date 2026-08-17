@@ -15,6 +15,7 @@ class CharacterManifest:
     entry: str
     index: str
     avatar: str | None = None
+    portrait: str | None = None
     voice: str | None = None
     license_id: str | None = None
 
@@ -25,6 +26,7 @@ class Character:
     root: Path
     character_md: str
     index_md: str
+    choices: list[dict] = field(default_factory=list)
 
     @property
     def id(self) -> str:
@@ -60,3 +62,4 @@ class AgentState:
     recent_messages: list[Message] = field(default_factory=list)
     tool_results: list[str] = field(default_factory=list)
     current_user_message: str = ""
+    pending_choice: dict | None = None

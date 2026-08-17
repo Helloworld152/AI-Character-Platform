@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
+import { GalgameView } from "./galgame/GalgameView.jsx";
+import { toPlayScript } from "./galgame/adapter.js";
+import { ChoicePanel } from "./galgame/ChoicePanel.jsx";
 
 const initialSettings = {
   api_key_configured: false,
@@ -118,6 +121,10 @@ function App() {
   const [deleteCharacterOpen, setDeleteCharacterOpen] = useState(false);
   const [deleteCharacterConfirmOpen, setDeleteCharacterConfirmOpen] = useState(false);
   const [deletingCharacter, setDeletingCharacter] = useState(false);
+  const [galgameMode, setGalgameMode] = useState(false);
+  const [portraitUploading, setPortraitUploading] = useState(false);
+  const [pendingChoice, setPendingChoice] = useState(null);
+  const [choiceBusy, setChoiceBusy] = useState(false);
   const messageListRef = useRef(null);
   const updater = window.aiCharacterUpdater;
   const desktop = window.aiCharacterDesktop;
@@ -251,6 +258,7 @@ function App() {
       return;
     }
     setStatus("切换中");
+    setPendingChoice(null);
     try {
       await requestJson("/api/switch", {
         method: "POST",
@@ -266,8 +274,15 @@ function App() {
 
   async function sendMessage(event) {
     event.preventDefault();
-    const text = input.trim();
-    if (!text || busy || !activeCharacterId) {
+    await sendMessageText(input.trim());
+  }
+
+  // 当前角色可见的挂起选择（隔离不同角色的选择框，防止串台）
+  const pendingForActive =
+    pendingChoice && pendingChoice.characterId === activeCharacterId ? pendingChoice : null;
+
+  async function sendMessageText(text) {
+    if (!text || busy || !activeCharacterId || pendingForActive) {
       return;
     }
 
@@ -288,6 +303,9 @@ function App() {
         ...current,
         { id: `assistant-${Date.now()}`, role: "assistant", content: payload.reply, created_at: Math.floor(Date.now() / 1000) },
       ]);
+      if (payload.pending_choice) {
+        setPendingChoice({ ...payload.pending_choice, characterId: activeCharacterId });
+      }
       setStatus("就绪");
     } catch (error) {
       setMessages((current) => [
@@ -297,6 +315,51 @@ function App() {
       setStatus("错误");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function answerChoice(selected, custom) {
+    if (!pendingForActive || choiceBusy) {
+      return;
+    }
+    setChoiceBusy(true);
+    setStatus("发送选择");
+    try {
+      const payload = await requestJson("/api/chat/answer", {
+        method: "POST",
+        body: JSON.stringify({
+          choice_id: pendingForActive.choice_id,
+          selected,
+          custom,
+        }),
+      });
+      setMessages((current) => [
+        ...current,
+        { id: `assistant-${Date.now()}`, role: "assistant", content: payload.reply, created_at: Math.floor(Date.now() / 1000) },
+      ]);
+      setPendingChoice(null);
+      setStatus("就绪");
+    } catch (error) {
+      setStatus(error.message);
+      setPendingChoice(null);
+    } finally {
+      setChoiceBusy(false);
+    }
+  }
+
+  async function cancelChoice() {
+    if (!pendingForActive) {
+      return;
+    }
+    try {
+      await requestJson("/api/chat/answer", {
+        method: "POST",
+        body: JSON.stringify({ choice_id: pendingForActive.choice_id, cancelled: true }),
+      });
+    } catch (error) {
+      setStatus(error.message);
+    } finally {
+      setPendingChoice(null);
     }
   }
 
@@ -529,6 +592,53 @@ function App() {
     }
   }
 
+  async function updatePortrait(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !activeCharacterId || portraitUploading) {
+      return;
+    }
+
+    setPortraitUploading(true);
+    setStatus("上传立绘");
+    try {
+      const form = new FormData();
+      form.append("character_id", activeCharacterId);
+      form.append("portrait", file);
+      const response = await fetch("/api/characters/portrait", {
+        method: "POST",
+        body: form,
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || "立绘上传失败");
+      }
+
+      const cacheBust = `t=${Date.now()}`;
+      const portraitUrl = payload.character.portrait_url.includes("?")
+        ? `${payload.character.portrait_url}&${cacheBust}`
+        : `${payload.character.portrait_url}?${cacheBust}`;
+      const nextCharacter = { ...payload.character, portrait_url: portraitUrl };
+
+      setActiveCharacter((current) => ({
+        ...(current || {}),
+        ...nextCharacter,
+      }));
+      setCharacters((current) =>
+        current.map((character) =>
+          character.id === nextCharacter.id
+            ? { ...character, portrait_url: portraitUrl }
+            : character
+        )
+      );
+      setStatus("立绘已更新");
+    } catch (error) {
+      setStatus(error.message);
+    } finally {
+      setPortraitUploading(false);
+    }
+  }
+
   async function openCharacterDirectory() {
     if (!activeCharacterId || openingCharacterDirectory) {
       return;
@@ -621,6 +731,37 @@ function App() {
       </aside>
 
       <section className="conversation">
+        <div className="view-tabs">
+          <button
+            className={!galgameMode ? "active" : ""}
+            onClick={() => setGalgameMode(false)}
+            type="button"
+          >
+            聊天
+          </button>
+          <button
+            className={galgameMode ? "active" : ""}
+            onClick={() => setGalgameMode(true)}
+            type="button"
+          >
+            Galgame
+          </button>
+        </div>
+        {galgameMode ? (
+          <GalgameView
+            character={activeCharacter}
+            choiceBusy={choiceBusy}
+            onAnswerChoice={answerChoice}
+            onCancelChoice={cancelChoice}
+            onSendMessage={sendMessageText}
+            onUploadPortrait={updatePortrait}
+            pendingChoice={pendingForActive}
+            portraitUploading={portraitUploading}
+            script={toPlayScript(messages, activeCharacter?.display_name)}
+            thinking={busy}
+          />
+        ) : (
+          <div className="chat-view">
         <header className="conversation-header">
           <div className="active-profile">
             <label className={`avatar-edit ${avatarUploading ? "uploading" : ""}`}>
@@ -721,13 +862,23 @@ function App() {
                 </article>
               ))
             )}
+            {pendingForActive && (
+              <div className="choice-slot">
+                <ChoicePanel
+                  busy={choiceBusy}
+                  choice={pendingForActive}
+                  onAnswer={answerChoice}
+                  onCancel={cancelChoice}
+                />
+              </div>
+            )}
           </div>
         )}
 
         {activeCharacter ? (
           <form className="composer" onSubmit={sendMessage}>
             <textarea
-              disabled={busy}
+              disabled={busy || Boolean(pendingForActive)}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
@@ -735,16 +886,18 @@ function App() {
                   event.currentTarget.form?.requestSubmit();
                 }
               }}
-              placeholder="输入你想说的话"
+              placeholder={pendingForActive ? "请先回答上面的问题…" : "输入你想说的话"}
               rows={2}
               value={input}
             />
-            <button disabled={busy || !input.trim()} type="submit">
+            <button disabled={busy || !input.trim() || Boolean(pendingForActive)} type="submit">
               发送
             </button>
           </form>
         ) : (
           <div className="composer-placeholder">选择角色后可开始聊天</div>
+        )}
+          </div>
         )}
       </section>
 

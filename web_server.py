@@ -89,6 +89,9 @@ class WebHandler(BaseHTTPRequestHandler):
             if path == "/api/chat":
                 self._handle_chat()
                 return
+            if path == "/api/chat/answer":
+                self._handle_answer_choice()
+                return
             if path == "/api/settings":
                 self._handle_save_settings()
                 return
@@ -103,6 +106,9 @@ class WebHandler(BaseHTTPRequestHandler):
                 return
             if path == "/api/characters/avatar":
                 self._handle_update_avatar()
+                return
+            if path == "/api/characters/portrait":
+                self._handle_update_portrait()
                 return
             if path == "/api/shutdown":
                 self._handle_shutdown()
@@ -125,6 +131,7 @@ class WebHandler(BaseHTTPRequestHandler):
                     "version": character.manifest.version,
                     "author": character.manifest.author,
                     "avatar_url": self._avatar_url(character),
+                    "portrait_url": self._portrait_url(character),
                     "active": active is not None and character.id == active.id,
                 }
                 for character in RUNTIME.character_manager.list_characters()
@@ -154,7 +161,49 @@ class WebHandler(BaseHTTPRequestHandler):
             if character is None:
                 self._send_json({"error": "请先选择角色"}, status=400)
                 return
-            reply = RUNTIME.conversation.send_message(character, message)
+            reply, pending_choice = RUNTIME.conversation.send_message(character, message)
+        self._send_json(
+            {
+                "reply": reply,
+                "character": {
+                    "id": character.id,
+                    "display_name": character.display_name,
+                    "avatar_url": self._avatar_url(character),
+                },
+                "pending_choice": pending_choice,
+            }
+        )
+
+    def _handle_answer_choice(self) -> None:
+        payload = self._read_json()
+        choice_id = str(payload.get("choice_id", "")).strip()
+        if not choice_id:
+            self._send_json({"error": "choice_id is required"}, status=400)
+            return
+
+        with RUNTIME_LOCK:
+            character = RUNTIME.character_manager.active_or_none()
+            if character is None:
+                self._send_json({"error": "请先选择角色"}, status=400)
+                return
+            try:
+                reply = RUNTIME.conversation.answer_choice(
+                    character,
+                    choice_id=choice_id,
+                    selected=payload.get("selected"),
+                    custom=str(payload.get("custom", "")),
+                    cancelled=bool(payload.get("cancelled", False)),
+                )
+            except KeyError as error:
+                self._send_json({"error": str(error)}, status=404)
+                return
+            except ValueError as error:
+                self._send_json({"error": str(error)}, status=400)
+                return
+
+        if reply is None:
+            self._send_json({"cancelled": True})
+            return
         self._send_json(
             {
                 "reply": reply,
@@ -427,6 +476,72 @@ class WebHandler(BaseHTTPRequestHandler):
             }
         )
 
+    def _handle_update_portrait(self) -> None:
+        try:
+            form = self._read_multipart(MAX_AVATAR_BYTES + 1024 * 1024)
+        except ValueError as error:
+            self._send_json({"error": str(error)}, status=400)
+            return
+        character_id = _field_value(form, "character_id")
+        if not character_id:
+            self._send_json({"error": "character_id is required"}, status=400)
+            return
+
+        upload = form["portrait"] if "portrait" in form else None
+        if upload is None or not getattr(upload, "file", None):
+            self._send_json({"error": "portrait file is required"}, status=400)
+            return
+
+        content_type = str(upload.type or "").split(";", 1)[0].strip().lower()
+        suffix = AVATAR_TYPES.get(content_type)
+        if not suffix:
+            self._send_json({"error": "只支持 png、jpg、webp、svg 立绘"}, status=400)
+            return
+
+        with RUNTIME_LOCK:
+            character = next(
+                (item for item in RUNTIME.character_manager.list_characters() if item.id == character_id),
+                None,
+            )
+            if character is None:
+                self._send_json({"error": "未知角色"}, status=404)
+                return
+
+            portrait_dir = character.root / "portrait"
+            portrait_dir.mkdir(parents=True, exist_ok=True)
+            portrait_path = portrait_dir / f"portrait{suffix}"
+            try:
+                bytes_written = _write_limited_upload(upload.file, portrait_path, MAX_AVATAR_BYTES)
+            except ValueError as error:
+                self._send_json({"error": str(error)}, status=400)
+                return
+            if bytes_written <= 0:
+                portrait_path.unlink(missing_ok=True)
+                self._send_json({"error": "立绘文件为空"}, status=400)
+                return
+
+            manifest_path = character.root / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["portrait"] = f"portrait/portrait{suffix}"
+            manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+            active = RUNTIME.character_manager.active_or_none()
+            active_character_id = active.id if active else None
+            RUNTIME.character_manager.reload()
+            if active_character_id:
+                RUNTIME.character_manager.activate(active_character_id)
+            updated = RUNTIME.character_manager.activate(character_id)
+
+        self._send_json(
+            {
+                "character": {
+                    "id": updated.id,
+                    "display_name": updated.display_name,
+                    "portrait_url": self._portrait_url(updated),
+                }
+            }
+        )
+
     def _handle_shutdown(self) -> None:
         if self.client_address[0] not in {"127.0.0.1", "::1"}:
             self._send_json({"error": "forbidden"}, status=403)
@@ -473,6 +588,12 @@ class WebHandler(BaseHTTPRequestHandler):
         if not avatar:
             return None
         return f"/assets/characters/{character.id}/{avatar}"
+
+    def _portrait_url(self, character) -> str | None:
+        portrait = character.manifest.portrait
+        if not portrait:
+            return None
+        return f"/assets/characters/{character.id}/{portrait}"
 
     def _reload_runtime(self) -> None:
         global RUNTIME

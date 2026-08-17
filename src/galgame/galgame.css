@@ -1,0 +1,891 @@
+/* ===== Galgame 演出视图（仿 dsh-galgame 渲染风格） =====
+ * 深海蓝演出配色 + 毛玻璃 + 大圆角 + 浮层布局（对话框盖在立绘上）。
+ * 所有 token 集中管理，带兜底值，主题缺失时不透明失效。 */
+
+.gg-view {
+  --gg-surface: rgba(10, 22, 42, 0.72);
+  --gg-surface-strong: rgba(8, 18, 36, 0.92);
+  --gg-text-primary: #f2f6fc;
+  --gg-text-secondary: #b7c6db;
+  --gg-accent: #4f9df0;
+  --gg-accent-deep: #1e4f8e;
+  --gg-border: rgba(255, 255, 255, 0.16);
+  --gg-interactive: rgba(255, 255, 255, 0.06);
+  --gg-name-bg: #1e4f8e;
+  --gg-name-text: #eaf2fc;
+  --gg-on-accent: #051124;
+  --gg-radius: 18px;
+  --gg-font-dialogue: clamp(16px, 1.5vw, 26px);
+  --gg-font-name: clamp(13px, 1.2vw, 20px);
+  --gg-font-ui: clamp(12px, 1vw, 15px);
+  --gg-motion-fade: 140ms;
+  --gg-motion-move: 240ms;
+
+  box-sizing: border-box;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--gg-text-primary);
+  font-family: "Avenir Next", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  caret-color: transparent;
+  isolation: isolate;
+}
+
+.gg-view *,
+.gg-view *::before,
+.gg-view *::after {
+  box-sizing: border-box;
+}
+
+/* ── 顶栏 ─────────────────────────────────────────────── */
+.gg-topbar {
+  z-index: 3;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(8, 18, 36, 0.88);
+}
+
+.gg-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #e8ecf5;
+  font-size: var(--gg-font-ui);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  user-select: none;
+}
+
+.gg-title::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gg-accent);
+  box-shadow: 0 0 10px var(--gg-accent);
+}
+
+.gg-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gg-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 12px;
+  color: #f2f6fc;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 999px;
+  background: rgba(10, 22, 42, 0.72);
+  cursor: pointer;
+  font-size: var(--gg-font-ui);
+  user-select: none;
+  transition: background var(--gg-motion-fade) ease, color var(--gg-motion-fade) ease;
+}
+
+.gg-tool:hover:not(:disabled) {
+  color: #ffffff;
+  background: rgba(42, 68, 116, 0.85);
+}
+
+.gg-tool:focus-visible {
+  outline: 2px solid var(--gg-accent);
+  outline-offset: 2px;
+}
+
+.gg-portrait-upload {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 12px;
+  color: #f2f6fc;
+  border: 1px dashed rgba(103, 158, 254, 0.8);
+  border-radius: 999px;
+  background: rgba(10, 22, 42, 0.72);
+  cursor: pointer;
+  font-size: var(--gg-font-ui);
+  transition: background var(--gg-motion-fade) ease, color var(--gg-motion-fade) ease;
+}
+
+.gg-portrait-upload:hover {
+  color: #ffffff;
+  background: rgba(42, 68, 116, 0.85);
+}
+
+.gg-portrait-upload.uploading {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.gg-portrait-upload input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* ── 舞台（立绘层，全屏） ─────────────────────────────── */
+.gg-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 底部浮层：对话框 + 输入条盖在立绘上，不挤压立绘 */
+.gg-stage-overlay {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(88%, 1180px);
+  transform: translateX(-50%);
+}
+
+.gg-watermark {
+  position: absolute;
+  right: 26px;
+  bottom: 20px;
+  color: rgba(160, 200, 245, 0.28);
+  font-size: var(--gg-font-ui);
+  letter-spacing: 0.12em;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* 立绘：bottom-center 锚点，高度撑满舞台，宽自适应 */
+.gg-portrait-wrap {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.gg-portrait {
+  height: 96%;
+  max-width: 78vw;
+  object-fit: contain;
+  object-position: bottom center;
+  filter: drop-shadow(0 10px 28px rgba(0, 0, 0, 0.35));
+  animation: ggPortraitFade var(--gg-motion-fade) ease-out both;
+  transform-origin: 50% 100%;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+@keyframes ggPortraitFade {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* 说话弹跳：弹两下；作用于 wrapper（keyframes 必须保留 translateX(-50%) 防偏位） */
+@keyframes ggBounce {
+  0% {
+    transform: translateX(-50%) translateY(0);
+  }
+  28% {
+    transform: translateX(-50%) translateY(-16px);
+  }
+  52% {
+    transform: translateX(-50%) translateY(0);
+  }
+  74% {
+    transform: translateX(-50%) translateY(-9px);
+  }
+  100% {
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.gg-bouncing {
+  animation: ggBounce 520ms ease-in-out both;
+  transform-origin: 50% 100%;
+}
+
+.gg-portrait-placeholder {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  width: 180px;
+  height: 280px;
+  color: var(--gg-text-secondary);
+  border: 2px dashed var(--gg-border);
+  border-radius: var(--gg-radius);
+  background: var(--gg-interactive);
+}
+
+.gg-portrait-placeholder span {
+  font-size: 26px;
+  font-weight: 900;
+}
+
+.gg-portrait-placeholder small {
+  font-size: var(--gg-font-ui);
+}
+
+/* 思考徽标（流式输出中）：三个跳动点 */
+.gg-thinking-badge {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  color: var(--gg-text-secondary);
+  border: 1px solid var(--gg-border);
+  border-radius: 999px;
+  background: rgba(10, 26, 52, 0.72);
+  font-size: var(--gg-font-ui);
+  transform: translateX(-50%);
+}
+
+.gg-thinking-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--gg-accent);
+  animation: ggThinkingDot 1.2s ease-in-out infinite;
+}
+
+.gg-thinking-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.gg-thinking-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes ggThinkingDot {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+/* ── 对话框（浮层内） ─────────────────────────────────── */
+.gg-dialogue-area {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.gg-nameplate {
+  align-self: flex-start;
+  min-width: 96px;
+  padding: 5px 16px 6px;
+  color: var(--gg-name-text);
+  border-radius: 10px 10px 10px 4px;
+  background: var(--gg-name-bg);
+  font-size: var(--gg-font-name);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+  user-select: none;
+}
+
+.gg-nameplate.player {
+  background: #3a5478;
+  color: #eaf2fc;
+}
+
+.gg-dialogue-box {
+  position: relative;
+  min-height: 64px;
+  max-height: 40vh;
+  padding: 16px 18px 34px;
+  overflow-y: auto;
+  color: var(--gg-text-primary);
+  border: 1px solid var(--gg-border);
+  border-radius: var(--gg-radius);
+  background: var(--gg-surface);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+  user-select: text;
+  -webkit-user-select: text;
+  caret-color: transparent;
+}
+
+.gg-dialogue-typing::after {
+  content: "▍";
+  margin-left: 1px;
+  color: var(--gg-accent);
+  animation: ggCaret 0.9s steps(1) infinite;
+}
+
+@keyframes ggCaret {
+  0%,
+  60% {
+    opacity: 1;
+  }
+  61%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.gg-dialogue-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.65;
+  animation: ggUnitIn 200ms ease-out both;
+}
+
+.gg-dialogue-body p {
+  margin: 0 0 0.5em;
+}
+
+.gg-dialogue-body p:last-child {
+  margin-bottom: 0;
+}
+
+@keyframes ggUnitIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.gg-dialogue-placeholder {
+  color: var(--gg-text-secondary);
+}
+
+.gg-controls {
+  position: absolute;
+  right: 12px;
+  bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gg-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  color: var(--gg-text-secondary);
+  border: 1px solid var(--gg-border);
+  border-radius: 8px;
+  background: var(--gg-interactive);
+  cursor: pointer;
+  font-size: 11px;
+  user-select: none;
+  transition: background var(--gg-motion-fade) ease, color var(--gg-motion-fade) ease;
+}
+
+.gg-nav:hover:not(:disabled) {
+  color: var(--gg-text-primary);
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.gg-nav:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.gg-position {
+  color: var(--gg-text-secondary);
+  font-size: var(--gg-font-ui);
+  font-variant-numeric: tabular-nums;
+}
+
+.gg-auto-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--gg-accent);
+  font-size: var(--gg-font-ui);
+  letter-spacing: 0.04em;
+}
+
+.gg-auto-hint::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gg-accent);
+  animation: ggAutoPulse 1s ease-in-out infinite;
+}
+
+@keyframes ggAutoPulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ── 输入条（浮层内，独立于对话框） ───────────────────── */
+.gg-input-area {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+}
+
+.gg-input-box {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px 8px 8px 14px;
+  border: 1px solid var(--gg-border);
+  border-radius: 16px;
+  background: var(--gg-surface);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+}
+
+.gg-input-field {
+  flex: 1;
+  min-height: 24px;
+  max-height: 120px;
+  padding: 0;
+  overflow-y: auto;
+  color: var(--gg-text-primary);
+  border: none;
+  outline: none;
+  background: transparent;
+  caret-color: var(--gg-text-primary);
+  font-family: inherit;
+  font-size: var(--gg-font-ui);
+  line-height: 1.5;
+  resize: none;
+}
+
+.gg-input-field::placeholder {
+  color: var(--gg-text-secondary);
+}
+
+.gg-input-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  color: var(--gg-on-accent);
+  border: none;
+  border-radius: 50%;
+  background: var(--gg-accent);
+  cursor: pointer;
+  font-size: 15px;
+  transition: filter var(--gg-motion-fade) ease, transform var(--gg-motion-move) ease;
+}
+
+.gg-input-send:hover:not(:disabled) {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+}
+
+.gg-input-send:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+/* ── 空态 ─────────────────────────────────────────────── */
+.gg-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  color: var(--gg-text-secondary);
+  text-align: center;
+  pointer-events: none;
+}
+
+.gg-empty strong {
+  color: var(--gg-text-primary);
+  font-size: clamp(18px, 2vw, 26px);
+  font-weight: 600;
+}
+
+.gg-empty p {
+  max-width: 460px;
+  margin: 0;
+  font-size: var(--gg-font-ui);
+  line-height: 1.7;
+}
+
+/* ── 历史抽屉 / 设置抽屉（右侧滑入） ──────────────────── */
+.gg-mask {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(2, 6, 16, 0.5);
+  animation: ggFadeIn 160ms ease-out both;
+}
+
+@keyframes ggFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.gg-panel {
+  width: min(560px, 92%);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--gg-border);
+  background: var(--gg-surface-strong);
+  box-shadow: -18px 0 50px rgba(0, 0, 0, 0.5);
+  animation: ggPanelIn 220ms ease-out both;
+}
+
+.gg-panel.narrow {
+  width: min(420px, 92%);
+}
+
+@keyframes ggPanelIn {
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.gg-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--gg-border);
+}
+
+.gg-panel-title {
+  color: var(--gg-text-primary);
+  font-size: var(--gg-font-ui);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.gg-panel-body {
+  flex: 1;
+  min-height: 0;
+  padding: 14px 18px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 历史条目 */
+.gg-backlog-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gg-backlog-name {
+  color: var(--gg-accent);
+  font-size: var(--gg-font-ui);
+  font-weight: 700;
+}
+
+/* 玩家名：也用蓝色系（亮蓝），与角色名区分且醒目 */
+.gg-backlog-name.player {
+  color: #7cb2ff;
+}
+
+.gg-backlog-text {
+  color: var(--gg-text-primary);
+  font-size: var(--gg-font-ui);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 设置项 */
+.gg-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.gg-setting-label {
+  color: var(--gg-text-primary);
+  font-size: var(--gg-font-ui);
+}
+
+.gg-setting-value {
+  flex: none;
+  min-width: 28px;
+  color: var(--gg-text-secondary);
+  font-size: var(--gg-font-ui);
+  text-align: right;
+}
+
+.gg-setting-range {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--gg-accent);
+  cursor: pointer;
+}
+
+/* 开关 */
+.gg-switch {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 22px;
+  border: 1px solid var(--gg-border);
+  border-radius: 999px;
+  background: var(--gg-accent-deep);
+  cursor: pointer;
+  transition: background var(--gg-motion-fade) ease;
+}
+
+.gg-switch.off {
+  background: var(--gg-interactive);
+}
+
+.gg-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform var(--gg-motion-move) ease;
+}
+
+.gg-switch:not(.off)::after {
+  transform: translateX(18px);
+}
+
+/* ── 减少动效 ─────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .gg-view *,
+  .gg-view *::before,
+  .gg-view *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── 提问选择框（Galgame 极简视觉小说风选项） ──────────── */
+.gg-choice-simple {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(520px, 66vw);
+  transform: translateX(-50%);
+  animation: ggCardIn 220ms ease-out both;
+}
+
+.gg-choice-q {
+  color: #f2f6fc;
+  font-size: clamp(15px, 1.5vw, 20px);
+  font-weight: 600;
+  line-height: 1.6;
+  text-align: center;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
+}
+
+.gg-choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gg-choice-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 8px 18px;
+  color: #eaf0fa;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  background: rgba(8, 18, 36, 0.62);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  font-size: clamp(14px, 1.3vw, 17px);
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+}
+
+.gg-choice-item:hover:not(:disabled) {
+  border-color: rgba(124, 178, 255, 0.55);
+  background: rgba(65, 118, 230, 0.35);
+  transform: scale(1.02);
+}
+
+.gg-choice-item:hover:not(:disabled)::before {
+  content: "▶";
+  position: absolute;
+  left: 14px;
+  color: #8fc0ff;
+  font-size: 11px;
+}
+
+.gg-choice-item.selected {
+  border-color: #7cb2ff;
+  background: rgba(65, 118, 230, 0.45);
+}
+
+.gg-choice-item.selected::before {
+  content: "▶";
+  position: absolute;
+  left: 14px;
+  color: #8fc0ff;
+  font-size: 11px;
+}
+
+.gg-choice-item:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.gg-choice-label {
+  font-weight: 600;
+}
+
+.gg-choice-desc {
+  color: #b7c6db;
+  font-size: 0.82em;
+}
+
+.gg-choice-custom {
+  min-height: 40px;
+  padding: 9px 14px;
+  color: #f2f6fc;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 10px;
+  outline: none;
+  background: rgba(8, 18, 36, 0.62);
+  caret-color: #f2f6fc;
+  font: inherit;
+  font-size: 14px;
+  text-align: center;
+}
+
+.gg-choice-custom:focus {
+  border-color: #7cb2ff;
+}
+
+.gg-choice-error {
+  color: #ff9d9d;
+  font-size: 12px;
+  text-align: center;
+}
+
+.gg-choice-actions {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+}
+
+.gg-choice-cancel {
+  padding: 6px 18px;
+  color: rgba(240, 246, 255, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.gg-choice-cancel:hover:not(:disabled) {
+  color: #f2f6fc;
+}
+
+.gg-choice-cancel:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.gg-choice-ok {
+  padding: 6px 22px;
+  color: #051124;
+  border: 1px solid #7cb2ff;
+  border-radius: 999px;
+  background: #7cb2ff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  transition: filter 0.14s ease;
+}
+
+.gg-choice-ok:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+
+.gg-choice-ok:disabled {
+  cursor: default;
+  opacity: 0.45;
+}

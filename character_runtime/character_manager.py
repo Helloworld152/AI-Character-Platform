@@ -194,7 +194,31 @@ class CharacterManager:
             root=root,
             character_md=character_md,
             index_md=index_md,
+            choices=self._load_choices(root),
         )
+
+    @staticmethod
+    def _load_choices(root: Path) -> list[dict]:
+        """加载可选的角色预设分支（choices.json）：
+        [{ "triggers": ["约会"], "prompt": "...", "question": "...", "options": [...], "multi_select": false, "allow_custom": true }]
+        """
+        choices_path = root / "choices.json"
+        if not choices_path.is_file():
+            return []
+        try:
+            data = json.loads(choices_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return []
+        if not isinstance(data, list):
+            return []
+        return [
+            item
+            for item in data
+            if isinstance(item, dict)
+            and isinstance(item.get("triggers"), list)
+            and item.get("triggers")
+            and str(item.get("question", "")).strip()
+        ]
 
     def _extract_zip_safely(self, package_path: Path, destination: Path) -> None:
         try:

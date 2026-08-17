@@ -1,0 +1,26 @@
+[
+  {
+    "triggers": ["周末", "约会", "出去玩"],
+    "prompt": "周末的话……嗯，正好有件事想问你。",
+    "question": "这个周末想怎么过？",
+    "options": [
+      { "label": "去看电影", "description": "最近有部口碑不错的片子" },
+      { "label": "在家待着", "description": "难得清静，一起宅一天" },
+      { "label": "出去走走", "description": "逛逛书店或者神社" }
+    ],
+    "multi_select": false,
+    "allow_custom": true
+  },
+  {
+    "triggers": ["约会", "喜欢你", "在一起"],
+    "prompt": "你、你突然说这个……",
+    "question": "你说的喜欢，是认真的吗？",
+    "options": [
+      { "label": "当然是认真的", "description": "直视她的眼睛" },
+      { "label": "开玩笑的啦", "description": "掩饰自己的紧张" },
+      { "label": "让我再想想", "description": "现在还没法回答" }
+    ],
+    "multi_select": false,
+    "allow_custom": false
+  }
+]

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from character_runtime.context_builder import ContextBuilder
 from character_runtime.llm import LlmClient
 from character_runtime.models import AgentState, Message
@@ -26,6 +28,10 @@ class CharacterAgent:
                 state.recent_messages.append(Message(role="assistant", content=result.text))
                 return result.text
 
+            # 终止型工具：ask_choice 挂起回合，等待玩家选择，不再继续循环
+            if result.tool_call.name == "ask_choice":
+                return self._handle_choice(state, result.tool_call.arguments)
+
             if tool_calls >= self._max_tool_calls:
                 raise RuntimeError("超过最大工具调用次数")
 
@@ -37,3 +43,21 @@ class CharacterAgent:
             )
             state.tool_results.append(f"[{tool_result.name}]\n{tool_result.output}")
             tool_calls += 1
+
+    def _handle_choice(self, state: AgentState, arguments: dict[str, str]) -> str:
+        options_raw = arguments.get("options", "[]")
+        try:
+            options = json.loads(options_raw) if isinstance(options_raw, str) else options_raw
+        except json.JSONDecodeError:
+            options = []
+        if not isinstance(options, list):
+            options = []
+
+        state.pending_choice = {
+            "question": str(arguments.get("question", "")).strip(),
+            "prompt": str(arguments.get("prompt", "")).strip(),
+            "options": options,
+            "multi_select": str(arguments.get("multi_select", "false")).lower() == "true",
+            "allow_custom": str(arguments.get("allow_custom", "false")).lower() == "true",
+        }
+        return state.pending_choice["prompt"] or "……"

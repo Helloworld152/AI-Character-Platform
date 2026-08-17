@@ -48,6 +48,8 @@ class DeepSeekClient(LlmClient):
                         "你是 AI Character Platform 的 Character Agent。"
                         "必须严格按照当前角色设定回复。"
                         "遇到具体剧情、人物关系、世界观或不确定信息时，优先调用工具读取角色包资料。"
+                        "剧情推进到需要玩家决定方向的关键分支（告白、选择、重大行动前）时，"
+                        "调用 ask_choice 工具向玩家提问并等待选择后再继续剧情。"
                         "最终回复只输出角色对玩家说的话。"
                     ),
                 },
@@ -194,6 +196,52 @@ class DeepSeekClient(LlmClient):
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "ask_choice",
+                    "description": (
+                        "剧情出现关键分支、需要玩家做决定时使用：向玩家提出一个问题并给出选项，"
+                        "等待玩家选择后再继续。日常闲聊、寒暄、普通提问不要调用；"
+                        "只有当剧情推进到真正需要玩家选择方向的分支点时才调用，"
+                        "且一次只提一个问题。选项要贴合当前剧情和角色语气，2-4 个为宜。"
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "prompt": {
+                                "type": "string",
+                                "description": "提问前的引导语，角色先说的一句话，例如「我有件事想问你」。",
+                            },
+                            "question": {
+                                "type": "string",
+                                "description": "要玩家回答的问题本身。",
+                            },
+                            "options": {
+                                "type": "array",
+                                "description": "2-4 个选项，每个包含 label（选项文字）和可选的 description（简短说明）。",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "label": {"type": "string"},
+                                        "description": {"type": "string"},
+                                    },
+                                    "required": ["label"],
+                                },
+                            },
+                            "multi_select": {
+                                "type": "boolean",
+                                "description": "是否允许多选，默认 false。",
+                            },
+                            "allow_custom": {
+                                "type": "boolean",
+                                "description": "是否允许玩家输入自定义答案，默认 false。",
+                            },
+                        },
+                        "required": ["prompt", "question", "options"],
+                    },
+                },
+            },
         ]
 
 
@@ -212,6 +260,27 @@ class RuleBasedLlmClient(LlmClient):
             yui_reply = self._handle_yui_companion(state)
             if yui_reply is not None:
                 return yui_reply
+
+        if any(word in user_message for word in ["你来决定", "给我选项", "有什么选择", "选哪个", "分支剧情"]):
+            return LlmResult(
+                tool_call=ToolCall(
+                    name="ask_choice",
+                    arguments={
+                        "prompt": "嗯……其实有件事正好想问你。",
+                        "question": "这个周末想怎么过？",
+                        "options": json.dumps(
+                            [
+                                {"label": "去看电影", "description": "最近有部不错的片子"},
+                                {"label": "在家打游戏", "description": "安静地宅一天"},
+                                {"label": "出去走走", "description": "逛逛公园什么的"},
+                            ],
+                            ensure_ascii=False,
+                        ),
+                        "multi_select": "false",
+                        "allow_custom": "true",
+                    },
+                )
+            )
 
         if "你喜欢" in user_message or "你有什么喜欢" in user_message:
             preference_result = self._latest_tool_output(state, "read_file")
