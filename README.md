@@ -10,7 +10,7 @@ AI Character Platform 当前已经具备从选择角色、开始对话到持续�
 - **导入自己的角色**：上传角色 Markdown 内容包和头像，把原创 OC 或喜欢的角色加入本地角色库。
 - **更换角色头像**：为当前角色上传自定义头像，调整角色的视觉形象。
 - **查看和管理记忆**：查看系统从对话中沉淀的用户偏好、昵称、约定和关系事件，也可以删除不需要的记忆。
-- **配置模型和对话行为**：设置 API Key、模型、温度、思考模式和上下文长度；没有 API Key 时可以使用本地规则型客户端体验基础流程。
+- **配置模型和对话行为**：设置 API Key、模型、温度、思考模式和上下文长度。
 - **本地保存和桌面更新**：聊天、角色、头像、记忆和设置保存在本机，并支持检查、下载和安装桌面端更新。
 
 角色会根据自己的资料和记忆回应对话，并在涉及具体剧情、人物关系或世界观时按需读取相关内容。
@@ -101,7 +101,8 @@ macOS 正式自动更新需要签名和公证；未签名包适合测试，不�
 
 ### 模型与 API 配置
 
-默认支持 DeepSeek API。未配置 API Key 时，会回退到本地规则型客户端。
+项目默认使用 DeepSeek API，也支持其他兼容 OpenAI Chat Completions 格式的模型 API，必须配置 API Key。
+修改模型名称、Base URL 和 API Key 即可切换服务商。现有 `DEEPSEEK_*` 环境变量名称为历史兼容配置名，不限制实际使用的模型服务商。
 
 可配置项包括：
 
@@ -113,7 +114,6 @@ macOS 正式自动更新需要签名和公证；未签名包适合测试，不�
 - `DEEPSEEK_TEMPERATURE`
 - `CONTEXT_RECENT_MESSAGES`
 - `CONTEXT_TOOL_RESULTS`
-- `AI_CHARACTER_LLM`
 
 ## 面向开发者
 
@@ -203,14 +203,7 @@ DEEPSEEK_THINKING=disabled
 DEEPSEEK_TEMPERATURE=0.8
 CONTEXT_RECENT_MESSAGES=40
 CONTEXT_TOOL_RESULTS=8
-AI_CHARACTER_LLM=auto
 AI_CHARACTER_DATA_DIR=/path/to/data
-```
-
-强制使用本地规则客户端：
-
-```bash
-AI_CHARACTER_LLM=rulebased python3 main.py
 ```
 
 记忆提取可单独配置：

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 import { GalgameView } from "./galgame/GalgameView.jsx";
@@ -6,8 +6,8 @@ import { toPlayScript } from "./galgame/adapter.js";
 import { ChoicePanel } from "./galgame/ChoicePanel.jsx";
 
 // 打字机文本：新回复逐字显示，点击跳过，变化时通知滚动
-function TypewriterText({ text, skip = false, speed = 25, onProgress }) {
-  const [count, setCount] = useState(text.length);
+function TypewriterText({ text, skip = false, speed = 25, onProgress, onComplete }) {
+  const [count, setCount] = useState(() => (skip ? text.length : 0));
 
   useEffect(() => {
     setCount(skip ? text.length : 0);
@@ -23,6 +23,9 @@ function TypewriterText({ text, skip = false, speed = 25, onProgress }) {
 
   useEffect(() => {
     onProgress?.();
+    if (count >= text.length) {
+      onComplete?.();
+    }
   }, [count]);
 
   return (
@@ -43,7 +46,6 @@ const initialSettings = {
   temperature: "0.8",
   recent_messages: "40",
   tool_results: "8",
-  llm_mode: "auto",
 };
 
 async function requestJson(url, options = {}) {
@@ -130,6 +132,7 @@ function App() {
   const [input, setInput] = useState("");
   const [status, setStatus] = useState("启动中");
   const [busy, setBusy] = useState(false);
+  const [characterSwitching, setCharacterSwitching] = useState(false);
   const [memoryLoading, setMemoryLoading] = useState(false);
   const [characterImporting, setCharacterImporting] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
@@ -153,10 +156,14 @@ function App() {
   const [portraitUploading, setPortraitUploading] = useState(false);
   const [pendingChoice, setPendingChoice] = useState(null);
   const [choiceBusy, setChoiceBusy] = useState(false);
+  const [continueBusy, setContinueBusy] = useState(false);
   const [skipTypingId, setSkipTypingId] = useState(null);
+  const [typingAssistantId, setTypingAssistantId] = useState(null);
   const messageListRef = useRef(null);
   const updater = window.aiCharacterUpdater;
   const desktop = window.aiCharacterDesktop;
+  const pendingForActive =
+    pendingChoice && pendingChoice.characterId === activeCharacterId ? pendingChoice : null;
 
   useEffect(() => {
     boot();
@@ -173,15 +180,18 @@ function App() {
     });
   }, [updater]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const list = messageListRef.current;
     if (!list) {
       return;
     }
-    requestAnimationFrame(() => {
+    const scrollToBottom = () => {
       list.scrollTop = list.scrollHeight;
-    });
-  }, [messages]);
+    };
+    scrollToBottom();
+    const frame = requestAnimationFrame(scrollToBottom);
+    return () => cancelAnimationFrame(frame);
+  }, [messages, busy, choiceBusy, pendingForActive, typingAssistantId, skipTypingId, galgameMode]);
 
   useEffect(() => {
     if (diaryOpen) {
@@ -283,21 +293,28 @@ function App() {
   }
 
   async function switchCharacter(characterId) {
-    if (busy || characterId === activeCharacterId) {
+    if (busy || choiceBusy || continueBusy || characterSwitching || characterId === activeCharacterId) {
       return;
     }
+    setCharacterSwitching(true);
     setStatus("切换中");
-    setPendingChoice(null);
     try {
       await requestJson("/api/switch", {
         method: "POST",
         body: JSON.stringify({ character_id: characterId }),
       });
+      setPendingChoice(null);
+      setMessages([]);
+      setInput("");
+      setSkipTypingId(null);
+      setTypingAssistantId(null);
       await loadCharacters();
       await loadMessages();
       setStatus("就绪");
     } catch (error) {
       setStatus(error.message);
+    } finally {
+      setCharacterSwitching(false);
     }
   }
 
@@ -306,12 +323,8 @@ function App() {
     await sendMessageText(input.trim());
   }
 
-  // 当前角色可见的挂起选择（隔离不同角色的选择框，防止串台）
-  const pendingForActive =
-    pendingChoice && pendingChoice.characterId === activeCharacterId ? pendingChoice : null;
-
   async function sendMessageText(text) {
-    if (!text || busy || !activeCharacterId || pendingForActive) {
+    if (!text || busy || continueBusy || characterSwitching || !activeCharacterId || pendingForActive) {
       return;
     }
 
@@ -328,9 +341,14 @@ function App() {
         method: "POST",
         body: JSON.stringify({ message: text }),
       });
+      const assistantId = `assistant-${Date.now()}`;
+      const hasAssistantReply = messages.some((message) => message.role === "assistant");
+      if (!galgameMode && !hasAssistantReply) {
+        setTypingAssistantId(assistantId);
+      }
       setMessages((current) => [
         ...current,
-        { id: `assistant-${Date.now()}`, role: "assistant", content: payload.reply, created_at: Math.floor(Date.now() / 1000) },
+        { id: assistantId, role: "assistant", content: payload.reply, created_at: Math.floor(Date.now() / 1000) },
       ]);
       if (payload.pending_choice) {
         setPendingChoice({ ...payload.pending_choice, characterId: activeCharacterId });
@@ -348,11 +366,17 @@ function App() {
   }
 
   async function answerChoice(selected, custom) {
-    if (!pendingForActive || choiceBusy) {
+    if (!pendingForActive || choiceBusy || continueBusy) {
       return;
     }
     setChoiceBusy(true);
     setStatus("发送选择");
+    const answerText = custom.trim() || selected.join("、");
+    const answerTime = Math.floor(Date.now() / 1000);
+    setMessages((current) => [
+      ...current,
+      { id: `user-choice-${Date.now()}`, role: "user", content: `[选择] ${answerText}`, created_at: answerTime },
+    ]);
     try {
       const payload = await requestJson("/api/chat/answer", {
         method: "POST",
@@ -360,19 +384,64 @@ function App() {
           choice_id: pendingForActive.choice_id,
           selected,
           custom,
+          galgame_mode: galgameMode,
         }),
       });
+      const assistantId = `assistant-${Date.now()}`;
+      const hasAssistantReply = messages.some((message) => message.role === "assistant");
+      if (!galgameMode && !hasAssistantReply) {
+        setTypingAssistantId(assistantId);
+      }
       setMessages((current) => [
         ...current,
-        { id: `assistant-${Date.now()}`, role: "assistant", content: payload.reply, created_at: Math.floor(Date.now() / 1000) },
+        { id: assistantId, role: "assistant", content: payload.reply, created_at: Math.floor(Date.now() / 1000) },
       ]);
-      setPendingChoice(null);
+      if (payload.pending_choice) {
+        setPendingChoice({ ...payload.pending_choice, characterId: activeCharacterId });
+      } else {
+        setPendingChoice(null);
+      }
       setStatus("就绪");
     } catch (error) {
       setStatus(error.message);
       setPendingChoice(null);
     } finally {
       setChoiceBusy(false);
+    }
+  }
+
+  async function continueStory() {
+    if (!galgameMode || busy || choiceBusy || continueBusy || !activeCharacterId || pendingForActive) {
+      return;
+    }
+    setContinueBusy(true);
+    setStatus("推进剧情");
+    try {
+      const payload = await requestJson("/api/chat/continue", {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      if (payload.reply) {
+        setMessages((current) => [
+          ...current,
+          {
+            id: `assistant-${Date.now()}`,
+            role: "assistant",
+            content: payload.reply,
+            created_at: Math.floor(Date.now() / 1000),
+          },
+        ]);
+      }
+      if (payload.pending_choice) {
+        setPendingChoice({ ...payload.pending_choice, characterId: activeCharacterId });
+      } else {
+        setPendingChoice(null);
+      }
+      setStatus("就绪");
+    } catch (error) {
+      setStatus(error.message);
+    } finally {
+      setContinueBusy(false);
     }
   }
 
@@ -408,7 +477,6 @@ function App() {
             temperature: settings.temperature,
             timeout_seconds: settings.timeout_seconds,
             thinking: settings.thinking,
-            llm_mode: settings.llm_mode,
           },
         }),
       });
@@ -770,7 +838,10 @@ function App() {
           </button>
           <button
             className={galgameMode ? "active" : ""}
-            onClick={() => setGalgameMode(true)}
+            onClick={() => {
+              setTypingAssistantId(null);
+              setGalgameMode(true);
+            }}
             type="button"
           >
             Galgame
@@ -780,14 +851,15 @@ function App() {
           <GalgameView
             character={activeCharacter}
             choiceBusy={choiceBusy}
+            continueBusy={continueBusy}
             onAnswerChoice={answerChoice}
             onCancelChoice={cancelChoice}
-            onSendMessage={sendMessageText}
+            onContinue={continueStory}
             onUploadPortrait={updatePortrait}
             pendingChoice={pendingForActive}
             portraitUploading={portraitUploading}
             script={toPlayScript(messages, activeCharacter?.display_name)}
-            thinking={busy}
+            thinking={busy || choiceBusy || continueBusy}
           />
         ) : (
           <div className="chat-view">
@@ -887,7 +959,7 @@ function App() {
                 const isTyping =
                   message.role === "assistant" &&
                   typeof message.id === "string" &&
-                  message.id.startsWith("assistant-");
+                  message.id === typingAssistantId;
                 return (
                   <article
                     className={`bubble ${message.role}${isTyping ? " typing" : ""}`}
@@ -904,6 +976,7 @@ function App() {
                               node.scrollTop = node.scrollHeight;
                             }
                           }}
+                          onComplete={() => setTypingAssistantId(null)}
                           skip={skipTypingId === message.id}
                           text={message.content}
                         />
@@ -917,6 +990,15 @@ function App() {
                   </article>
                 );
               })
+            )}
+            {(busy || choiceBusy) && (
+              <article aria-label="角色正在生成回复" className="bubble assistant generating" role="status">
+                <div aria-hidden="true" className="bubble-content generating-content">
+                  <span className="generating-dot" />
+                  <span className="generating-dot" />
+                  <span className="generating-dot" />
+                </div>
+              </article>
             )}
             {pendingForActive && (
               <div className="choice-slot">
@@ -934,7 +1016,7 @@ function App() {
         {activeCharacter ? (
           <form className="composer" onSubmit={sendMessage}>
             <textarea
-              disabled={busy || Boolean(pendingForActive)}
+              disabled={busy || characterSwitching || Boolean(pendingForActive)}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
@@ -946,7 +1028,7 @@ function App() {
               rows={2}
               value={input}
             />
-            <button disabled={busy || !input.trim() || Boolean(pendingForActive)} type="submit">
+            <button disabled={busy || characterSwitching || !input.trim() || Boolean(pendingForActive)} type="submit">
               发送
             </button>
           </form>
@@ -1218,14 +1300,7 @@ function App() {
               {settingsTab === "model" && (
                 <form className="settings-panel" onSubmit={saveSettings}>
               <label>
-                <span>模式</span>
-                <select value={settings.llm_mode} onChange={(event) => updateSetting("llm_mode", event.target.value)}>
-                  <option value="auto">自动</option>
-                  <option value="rulebased">本地规则</option>
-                </select>
-              </label>
-              <label>
-                <span>DeepSeek API Key</span>
+                <span>模型 API Key</span>
                 <input
                   autoComplete="off"
                   onChange={(event) => setApiKey(event.target.value)}
@@ -1238,11 +1313,11 @@ function App() {
                 {settings.api_key_configured ? `已保存：${settings.api_key_preview}` : "未配置"}
               </div>
               <label>
-                <span>模型</span>
+                <span>模型（默认 DeepSeek）</span>
                 <input value={settings.model} onChange={(event) => updateSetting("model", event.target.value)} />
               </label>
               <label>
-                <span>Base URL</span>
+                <span>Base URL（支持 OpenAI 兼容接口）</span>
                 <input value={settings.base_url} onChange={(event) => updateSetting("base_url", event.target.value)} />
               </label>
               <div className="field-grid">

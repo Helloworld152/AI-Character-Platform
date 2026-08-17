@@ -9,5 +9,6 @@
   "index": "INDEX.md",
   "avatar": "avatar/custom.png",
   "voice": "voice/voice.json",
-  "license_id": "fan_character_profile"
+  "license_id": "fan_character_profile",
+  "portrait": "portrait/portrait.png"
 }

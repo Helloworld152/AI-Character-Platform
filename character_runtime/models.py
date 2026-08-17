@@ -59,6 +59,8 @@ class LlmResult:
 class AgentState:
     character: Character
     user_id: str = "local_user"
+    interaction_mode: str = "chat"
+    turn_phase: str = ""
     recent_messages: list[Message] = field(default_factory=list)
     tool_results: list[str] = field(default_factory=list)
     current_user_message: str = ""

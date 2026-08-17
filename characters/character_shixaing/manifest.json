@@ -7,5 +7,6 @@
   "author": "helloworld152",
   "entry": "CHARACTER.md",
   "index": "INDEX.md",
-  "avatar": "avatar/custom.jpg"
+  "avatar": "avatar/custom.jpg",
+  "portrait": "portrait/portrait.png"
 }

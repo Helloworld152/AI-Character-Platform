@@ -11,7 +11,7 @@ export function ChoicePanel({ choice, variant = "inline", busy = false, onAnswer
     return null;
   }
   const multi = choice.multi_select === true;
-  const allowCustom = choice.allow_custom === true;
+  const allowCustom = variant === "stage" || choice.allow_custom === true;
   const options = Array.isArray(choice.options) ? choice.options : [];
   const customText = custom.trim();
 
@@ -48,6 +48,17 @@ export function ChoicePanel({ choice, variant = "inline", busy = false, onAnswer
     onAnswer(selected, customText);
   };
 
+  const chooseStageOption = (label) => {
+    if (busy) {
+      return;
+    }
+    if (multi) {
+      toggleOption(label);
+      return;
+    }
+    onAnswer([label], "");
+  };
+
   const cancel = () => {
     if (!busy) {
       onCancel?.();
@@ -73,7 +84,7 @@ export function ChoicePanel({ choice, variant = "inline", busy = false, onAnswer
                 className={`gg-choice-item${isSelected ? " selected" : ""}`}
                 disabled={busy}
                 key={label}
-                onClick={() => toggleOption(label)}
+                onClick={() => chooseStageOption(label)}
                 type="button"
               >
                 <span className="gg-choice-label">{label}</span>
@@ -83,38 +94,40 @@ export function ChoicePanel({ choice, variant = "inline", busy = false, onAnswer
           })}
         </div>
         {allowCustom && (
-          <input
-            className="gg-choice-custom"
-            disabled={busy}
-            onChange={(event) => handleCustom(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                submit();
-              }
-            }}
-            placeholder="输入自定义答案…"
-            value={custom}
-          />
-        )}
-        {error && (
-          <div className="gg-choice-error" role="status">
-            {error}
+          <div className="gg-choice-custom-wrap">
+            <textarea
+              className="gg-choice-custom"
+              disabled={busy}
+              onChange={(event) => handleCustom(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  submit();
+                }
+              }}
+              placeholder="或者自己输入回答或行动…"
+              rows={2}
+              value={custom}
+            />
           </div>
         )}
-        <div className="gg-choice-actions">
-          <button className="gg-choice-cancel" disabled={busy} onClick={cancel} type="button">
-            取消
-          </button>
-          <button
-            className="gg-choice-ok"
-            disabled={busy || (selected.length === 0 && customText === "")}
-            onClick={submit}
-            type="button"
-          >
-            {busy ? "…" : "确定"}
-          </button>
-        </div>
+        {(multi || allowCustom) && (
+          <div className="gg-choice-actions">
+            {multi && (
+              <button className="gg-choice-cancel" disabled={busy} onClick={cancel} type="button">
+                取消
+              </button>
+            )}
+            <button
+              className="gg-choice-ok"
+              disabled={busy || (selected.length === 0 && customText === "")}
+              onClick={submit}
+              type="button"
+            >
+              {busy ? "…" : "确定"}
+            </button>
+          </div>
+        )}
       </div>
     );
   }

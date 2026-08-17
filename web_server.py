@@ -36,7 +36,6 @@ ENV_KEYS = [
     "DEEPSEEK_TEMPERATURE",
     "CONTEXT_RECENT_MESSAGES",
     "CONTEXT_TOOL_RESULTS",
-    "AI_CHARACTER_LLM",
 ]
 
 
@@ -91,6 +90,9 @@ class WebHandler(BaseHTTPRequestHandler):
                 return
             if path == "/api/chat/answer":
                 self._handle_answer_choice()
+                return
+            if path == "/api/chat/continue":
+                self._handle_continue_story()
                 return
             if path == "/api/settings":
                 self._handle_save_settings()
@@ -188,12 +190,13 @@ class WebHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": "请先选择角色"}, status=400)
                 return
             try:
-                reply = RUNTIME.conversation.answer_choice(
+                reply, pending_choice = RUNTIME.conversation.answer_choice(
                     character,
                     choice_id=choice_id,
                     selected=payload.get("selected"),
                     custom=str(payload.get("custom", "")),
                     cancelled=bool(payload.get("cancelled", False)),
+                    galgame_mode=bool(payload.get("galgame_mode", False)),
                 )
             except KeyError as error:
                 self._send_json({"error": str(error)}, status=404)
@@ -208,6 +211,28 @@ class WebHandler(BaseHTTPRequestHandler):
         self._send_json(
             {
                 "reply": reply,
+                "pending_choice": pending_choice,
+                "character": {
+                    "id": character.id,
+                    "display_name": character.display_name,
+                    "avatar_url": self._avatar_url(character),
+                    "portrait_url": self._portrait_url(character),
+                },
+            }
+        )
+
+    def _handle_continue_story(self) -> None:
+        with RUNTIME_LOCK:
+            character = RUNTIME.character_manager.active_or_none()
+            if character is None:
+                self._send_json({"error": "请先选择角色"}, status=400)
+                return
+            reply, pending_choice = RUNTIME.conversation.continue_story(character)
+
+        self._send_json(
+            {
+                "reply": reply,
+                "pending_choice": pending_choice,
                 "character": {
                     "id": character.id,
                     "display_name": character.display_name,
@@ -476,7 +501,6 @@ class WebHandler(BaseHTTPRequestHandler):
                     "id": updated.id,
                     "display_name": updated.display_name,
                     "avatar_url": self._avatar_url(updated),
-                    "avatar_url": self._avatar_url(updated),
                     "portrait_url": self._portrait_url(updated),
                 }
             }
@@ -701,7 +725,6 @@ def _read_settings() -> dict:
         "temperature": values.get("DEEPSEEK_TEMPERATURE") or os.environ.get("DEEPSEEK_TEMPERATURE", "0.8"),
         "recent_messages": values.get("CONTEXT_RECENT_MESSAGES") or os.environ.get("CONTEXT_RECENT_MESSAGES", "40"),
         "tool_results": values.get("CONTEXT_TOOL_RESULTS") or os.environ.get("CONTEXT_TOOL_RESULTS", "8"),
-        "llm_mode": values.get("AI_CHARACTER_LLM") or os.environ.get("AI_CHARACTER_LLM", "auto"),
     }
 
 
@@ -716,7 +739,6 @@ def _write_settings(settings: dict) -> None:
         "temperature": "DEEPSEEK_TEMPERATURE",
         "recent_messages": "CONTEXT_RECENT_MESSAGES",
         "tool_results": "CONTEXT_TOOL_RESULTS",
-        "llm_mode": "AI_CHARACTER_LLM",
     }
 
     for source_key, env_key in mapping.items():
