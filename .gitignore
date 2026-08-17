@@ -16,6 +16,9 @@ node_modules/
 dist-web/
 release/
 
+# 本地构建工具（运行时临时修改 package.json / electron/main.js，不纳入版本控制）
+compile.sh
+
 build/
 dist/
 *.spec
