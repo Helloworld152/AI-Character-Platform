@@ -883,7 +883,9 @@ form.settings-panel {
 
 .memory-list {
   display: grid;
+  align-content: start;
   gap: 8px;
+  min-height: 0;
   max-height: none;
   overflow-y: auto;
 }

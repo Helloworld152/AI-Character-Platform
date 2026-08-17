@@ -40,6 +40,10 @@ ENV_KEYS = [
 ]
 
 
+class ReusableThreadingHTTPServer(ThreadingHTTPServer):
+    allow_reuse_address = True
+
+
 class WebHandler(BaseHTTPRequestHandler):
     server_version = "AICharacterWeb/0.1"
 
@@ -530,7 +534,7 @@ class WebHandler(BaseHTTPRequestHandler):
 def main() -> int:
     host = os.environ.get("AI_CHARACTER_HOST", "127.0.0.1")
     port = int(os.environ.get("AI_CHARACTER_PORT", "8787"))
-    server = ThreadingHTTPServer((host, port), WebHandler)
+    server = ReusableThreadingHTTPServer((host, port), WebHandler)
     print(f"Web client running at http://{host}:{port}")
     try:
         server.serve_forever()

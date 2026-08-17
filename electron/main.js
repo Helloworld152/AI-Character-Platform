@@ -26,6 +26,7 @@ let isQuitting = false;
 let updateDownloaded = false;
 
 autoUpdater.autoDownload = false;
+autoUpdater.allowPrerelease = app.getVersion().includes("-");
 
 function sendUpdateStatus(payload) {
   if (!mainWindow) {
@@ -184,23 +185,38 @@ async function stopBackend() {
 
   const processToStop = backend;
   const pidToStop = backendPid;
+  const waitForExit = processToStop
+    ? new Promise((resolve) => {
+        processToStop.once("exit", resolve);
+      })
+    : Promise.resolve();
   await requestBackendShutdown();
 
-  setTimeout(() => {
-    if (backend === processToStop) {
-      if (processToStop) {
-        processToStop.kill();
-      } else if (pidToStop) {
-        try {
-          process.kill(pidToStop);
-        } catch (_) {
-          return;
-        }
+  const exited = await Promise.race([
+    waitForExit.then(() => true),
+    new Promise((resolve) => setTimeout(() => resolve(false), 1500)),
+  ]);
+
+  if (!exited) {
+    if (processToStop) {
+      processToStop.kill();
+    } else if (pidToStop) {
+      try {
+        process.kill(pidToStop);
+      } catch (_) {
+        return;
       }
-      backend = null;
-      backendPid = null;
     }
-  }, 1200);
+    await Promise.race([
+      waitForExit,
+      new Promise((resolve) => setTimeout(resolve, 800)),
+    ]);
+  }
+
+  if (backend === processToStop) {
+    backend = null;
+    backendPid = null;
+  }
 }
 
 function waitForBackend(attempt = 0) {
