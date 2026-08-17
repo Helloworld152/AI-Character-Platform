@@ -26,7 +26,7 @@ let isQuitting = false;
 let updateDownloaded = false;
 
 autoUpdater.autoDownload = false;
-autoUpdater.allowPrerelease = app.getVersion().includes("-");
+autoUpdater.allowPrerelease = true;
 
 function sendUpdateStatus(payload) {
   if (!mainWindow) {
