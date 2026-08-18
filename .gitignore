@@ -13,6 +13,9 @@ Thumbs.db
 
 data/
 node_modules/
+plans/
+debug/
+target/
 dist-web/
 release/
 

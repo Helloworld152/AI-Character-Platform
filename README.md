@@ -22,6 +22,26 @@ AI Character Platform 当前已经具备从选择角色、开始对话到持续�
 - 在本地维护多角色内容库，而不是依赖单一云端角色模板
 - 做偏陪伴、日常互动、剧情推进的角色聊天体验
 
+## 界面预览
+
+### 聊天与角色记忆
+
+![聊天界面](docs/images/chat.png)
+
+![角色日记](docs/images/diary.png)
+
+### Galgame 模式
+
+![Galgame 选项](docs/images/galgame-choice.png)
+
+![台词回放](docs/images/galgame-history.png)
+
+### 角色管理与设置
+
+![角色导入](docs/images/character-import.png)
+
+![运行时设置](docs/images/settings.png)
+
 当前桌面端由三部分组成：
 
 - Python 后端：角色加载、会话、数据库、记忆、工具调用
