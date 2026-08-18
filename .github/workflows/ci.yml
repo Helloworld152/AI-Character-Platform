@@ -176,7 +176,7 @@ jobs:
           retention-days: 14
 
   build-tauri-android:
-    name: Build Tauri Android
+    name: Build Tauri Android Debug APK
     runs-on: ubuntu-24.04
 
     steps:
@@ -220,15 +220,13 @@ jobs:
       - name: Initialize Tauri Android project
         run: npm run tauri:android:init -- --ci --skip-targets-install
 
-      - name: Build Tauri Android
-        run: npm run tauri:release:android -- --ci
+      - name: Build Tauri Android debug APK
+        run: npm run tauri android build -- --debug --apk
 
-      - name: Upload Tauri Android artifact
+      - name: Upload Tauri Android debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: tauri-android-${{ github.sha }}
-          path: |
-            src-tauri/gen/android/app/build/outputs/apk/**/*.apk
-            src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
+          name: tauri-android-debug-${{ github.sha }}
+          path: src-tauri/gen/android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
