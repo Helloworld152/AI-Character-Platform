@@ -27,7 +27,6 @@ class Character:
     root: Path
     character_md: str
     index_md: str
-    choices: list[dict] = field(default_factory=list)
 
     @property
     def id(self) -> str:

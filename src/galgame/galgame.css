@@ -876,25 +876,33 @@
   opacity: 0.45;
 }
 
-/* 舞台背景图：铺满舞台，立绘浮在其上 */
+/* 舞台背景图：最底层（z-index 0），铺满整个舞台 */
 .gg-background {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   z-index: 0;
   pointer-events: none;
+  overflow: hidden;
 }
 
 .gg-background img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: center;
 }
 
-/* 立绘/浮层盖在背景之上 */
-.gg-stage .gg-portrait-wrap,
+/* 立绘在背景之上（z-index 1），浮层再其上 */
+.gg-stage .gg-portrait-wrap {
+  z-index: 1;
+}
+
 .gg-stage .gg-stage-overlay,
 .gg-stage .gg-choice-simple,
 .gg-stage .gg-thinking-badge {
-  z-index: 1;
+  z-index: 2;
 }
