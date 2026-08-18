@@ -16,6 +16,7 @@ class CharacterManifest:
     index: str
     avatar: str | None = None
     portrait: str | None = None
+    background: str | None = None
     voice: str | None = None
     license_id: str | None = None
 

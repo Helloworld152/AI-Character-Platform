@@ -890,3 +890,26 @@
   opacity: 0.45;
 }
 
+
+/* 舞台背景图：铺满舞台，立绘浮在其上 */
+.gg-background {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.gg-background img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+/* 立绘/浮层盖在背景之上 */
+.gg-stage .gg-portrait-wrap,
+.gg-stage .gg-stage-overlay,
+.gg-stage .gg-choice-simple,
+.gg-stage .gg-thinking-badge {
+  z-index: 1;
+}

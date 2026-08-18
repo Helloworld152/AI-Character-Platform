@@ -151,6 +151,7 @@ function App() {
   const [deletingCharacter, setDeletingCharacter] = useState(false);
   const [galgameMode, setGalgameMode] = useState(false);
   const [portraitUploading, setPortraitUploading] = useState(false);
+  const [backgroundUploading, setBackgroundUploading] = useState(false);
   const [pendingChoice, setPendingChoice] = useState(null);
   const [choiceBusy, setChoiceBusy] = useState(false);
   const [skipTypingId, setSkipTypingId] = useState(null);
@@ -668,6 +669,53 @@ function App() {
     }
   }
 
+  async function updateBackground(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !activeCharacterId || backgroundUploading) {
+      return;
+    }
+
+    setBackgroundUploading(true);
+    setStatus("上传背景");
+    try {
+      const form = new FormData();
+      form.append("character_id", activeCharacterId);
+      form.append("background", file);
+      const response = await fetch("/api/characters/background", {
+        method: "POST",
+        body: form,
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || "背景上传失败");
+      }
+
+      const cacheBust = `t=${Date.now()}`;
+      const backgroundUrl = payload.character.background_url.includes("?")
+        ? `${payload.character.background_url}&${cacheBust}`
+        : `${payload.character.background_url}?${cacheBust}`;
+      const nextCharacter = { ...payload.character, background_url: backgroundUrl };
+
+      setActiveCharacter((current) => ({
+        ...(current || {}),
+        ...nextCharacter,
+      }));
+      setCharacters((current) =>
+        current.map((character) =>
+          character.id === nextCharacter.id
+            ? { ...character, background_url: backgroundUrl }
+            : character
+        )
+      );
+      setStatus("背景已更新");
+    } catch (error) {
+      setStatus(error.message);
+    } finally {
+      setBackgroundUploading(false);
+    }
+  }
+
   async function openCharacterDirectory() {
     if (!activeCharacterId || openingCharacterDirectory) {
       return;
@@ -778,11 +826,14 @@ function App() {
         </div>
         {galgameMode ? (
           <GalgameView
+            backgroundUploading={backgroundUploading}
+            backgroundUrl={activeCharacter?.background_url || null}
             character={activeCharacter}
             choiceBusy={choiceBusy}
             onAnswerChoice={answerChoice}
             onCancelChoice={cancelChoice}
             onSendMessage={sendMessageText}
+            onUploadBackground={updateBackground}
             onUploadPortrait={updatePortrait}
             pendingChoice={pendingForActive}
             portraitUploading={portraitUploading}

@@ -110,6 +110,9 @@ class WebHandler(BaseHTTPRequestHandler):
             if path == "/api/characters/portrait":
                 self._handle_update_portrait()
                 return
+            if path == "/api/characters/background":
+                self._handle_update_background()
+                return
             if path == "/api/shutdown":
                 self._handle_shutdown()
                 return
@@ -132,6 +135,7 @@ class WebHandler(BaseHTTPRequestHandler):
                     "author": character.manifest.author,
                     "avatar_url": self._avatar_url(character),
                     "portrait_url": self._portrait_url(character),
+                    "background_url": self._background_url(character),
                     "active": active is not None and character.id == active.id,
                 }
                 for character in RUNTIME.character_manager.list_characters()
@@ -548,6 +552,72 @@ class WebHandler(BaseHTTPRequestHandler):
             }
         )
 
+    def _handle_update_background(self) -> None:
+        try:
+            form = self._read_multipart(MAX_AVATAR_BYTES + 1024 * 1024)
+        except ValueError as error:
+            self._send_json({"error": str(error)}, status=400)
+            return
+        character_id = _field_value(form, "character_id")
+        if not character_id:
+            self._send_json({"error": "character_id is required"}, status=400)
+            return
+
+        upload = form["background"] if "background" in form else None
+        if upload is None or not getattr(upload, "file", None):
+            self._send_json({"error": "background file is required"}, status=400)
+            return
+
+        content_type = str(upload.type or "").split(";", 1)[0].strip().lower()
+        suffix = AVATAR_TYPES.get(content_type)
+        if not suffix:
+            self._send_json({"error": "只支持 png、jpg、webp、svg 背景图"}, status=400)
+            return
+
+        with RUNTIME_LOCK:
+            character = next(
+                (item for item in RUNTIME.character_manager.list_characters() if item.id == character_id),
+                None,
+            )
+            if character is None:
+                self._send_json({"error": "未知角色"}, status=404)
+                return
+
+            background_dir = character.root / "background"
+            background_dir.mkdir(parents=True, exist_ok=True)
+            background_path = background_dir / f"background{suffix}"
+            try:
+                bytes_written = _write_limited_upload(upload.file, background_path, MAX_AVATAR_BYTES)
+            except ValueError as error:
+                self._send_json({"error": str(error)}, status=400)
+                return
+            if bytes_written <= 0:
+                background_path.unlink(missing_ok=True)
+                self._send_json({"error": "背景图文件为空"}, status=400)
+                return
+
+            manifest_path = character.root / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["background"] = f"background/background{suffix}"
+            manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+            active = RUNTIME.character_manager.active_or_none()
+            active_character_id = active.id if active else None
+            RUNTIME.character_manager.reload()
+            if active_character_id:
+                RUNTIME.character_manager.activate(active_character_id)
+            updated = RUNTIME.character_manager.activate(character_id)
+
+        self._send_json(
+            {
+                "character": {
+                    "id": updated.id,
+                    "display_name": updated.display_name,
+                    "background_url": self._background_url(updated),
+                }
+            }
+        )
+
     def _handle_shutdown(self) -> None:
         if self.client_address[0] not in {"127.0.0.1", "::1"}:
             self._send_json({"error": "forbidden"}, status=403)
@@ -600,6 +670,12 @@ class WebHandler(BaseHTTPRequestHandler):
         if not portrait:
             return None
         return f"/assets/characters/{character.id}/{portrait}"
+
+    def _background_url(self, character) -> str | None:
+        background = character.manifest.background
+        if not background:
+            return None
+        return f"/assets/characters/{character.id}/{background}"
 
     def _reload_runtime(self) -> None:
         global RUNTIME

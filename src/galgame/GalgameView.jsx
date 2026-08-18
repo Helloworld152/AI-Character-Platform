@@ -18,6 +18,9 @@ export function GalgameView({
   onSendMessage,
   onUploadPortrait,
   portraitUploading,
+  backgroundUrl,
+  onUploadBackground,
+  backgroundUploading,
   pendingChoice,
   choiceBusy,
   onAnswerChoice,
@@ -54,6 +57,15 @@ export function GalgameView({
       <div className="gg-topbar">
         <div className="gg-title">GALGAME · {displayName}</div>
         <div className="gg-top-actions">
+          <label className={`gg-portrait-upload ${backgroundUploading ? "uploading" : ""}`}>
+            {backgroundUploading ? "上传中…" : "上传背景"}
+            <input
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+              disabled={backgroundUploading}
+              onChange={onUploadBackground}
+              type="file"
+            />
+          </label>
           <label className={`gg-portrait-upload ${portraitUploading ? "uploading" : ""}`}>
             {portraitUploading ? "上传中…" : "上传立绘"}
             <input
@@ -81,6 +93,7 @@ export function GalgameView({
       </div>
 
       <div className="gg-stage">
+        {backgroundUrl && <div className="gg-background"><img alt="" src={backgroundUrl} /></div>}
         <Stage
           avatarUrl={avatarUrl}
           portraitUrl={portraitUrl}
