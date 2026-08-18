@@ -157,7 +157,10 @@ jobs:
         run: npm ci
 
       - name: Build Tauri macOS release
-        run: npm run tauri:release:macos -- --ci --no-sign
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run tauri:release:macos -- --ci
 
       - name: Upload Tauri macOS artifact
         uses: actions/upload-artifact@v4
@@ -187,7 +190,10 @@ jobs:
 
       - name: Build Tauri Windows release
         shell: pwsh
-        run: npm run tauri:release:windows -- --ci --no-sign
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run tauri:release:windows -- --ci
 
       - name: Upload Tauri Windows artifact
         uses: actions/upload-artifact@v4
@@ -266,10 +272,22 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+
+      - name: Generate Tauri updater metadata
+        shell: bash
+        run: |
+          python3 scripts/generate-tauri-latest-json.py \
+            --artifacts artifacts \
+            --repository "${GITHUB_REPOSITORY}" \
+            --tag "${GITHUB_REF_NAME}" \
+            --version "${GITHUB_REF_NAME#v}"
 
       - name: Detect prerelease
         id: release-type

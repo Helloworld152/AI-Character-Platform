@@ -29,6 +29,8 @@ const BACKEND_HOST: &str = "127.0.0.1";
 const BACKEND_PORT: &str = "8787";
 #[cfg(desktop)]
 const CHARACTER_ID_MAX_LENGTH: usize = 80;
+#[cfg(desktop)]
+const DATA_DIRECTORY_NAME: &str = "ai-character-platform";
 
 #[cfg(desktop)]
 #[derive(Default)]
@@ -73,11 +75,15 @@ fn open_character_directory(character_id: String) -> Result<(), String> {
 pub fn run() {
     #[cfg(desktop)]
     let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(BackendState::default())
         .setup(|app| {
             let root = resolve_app_root(app.handle())
                 .map_err(|error| io::Error::other(format!("解析应用目录失败: {error}")))?;
-            let child = start_backend(&root)
+            let data_root = data_root()
+                .map_err(|error| io::Error::other(format!("解析数据目录失败: {error}")))?;
+            let child = start_backend(&root, &data_root)
                 .map_err(|error| io::Error::other(format!("启动 Python 后端失败: {error}")))?;
             app.state::<BackendState>().0.lock().unwrap().replace(child);
             if let Err(error) = wait_for_backend() {
@@ -118,7 +124,7 @@ fn resolve_app_root(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 #[cfg(desktop)]
-fn start_backend(root: &Path) -> Result<Child, String> {
+fn start_backend(root: &Path, data_root: &Path) -> Result<Child, String> {
     let script = root.join("web_server.py");
     if !script.is_file() {
         return Err(format!("后端入口不存在: {}", script.display()));
@@ -138,6 +144,7 @@ fn start_backend(root: &Path) -> Result<Child, String> {
         .env("AI_CHARACTER_HOST", BACKEND_HOST)
         .env("AI_CHARACTER_PORT", BACKEND_PORT)
         .env("AI_CHARACTER_APP_ROOT", root)
+        .env("AI_CHARACTER_DATA_DIR", data_root)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
@@ -229,7 +236,7 @@ fn data_root() -> Result<PathBuf, String> {
             .map(PathBuf::from)
             .unwrap_or_else(|| home.join(".local").join("share"))
     };
-    Ok(base.join("AI Character Platform"))
+    Ok(base.join(DATA_DIRECTORY_NAME))
 }
 
 #[cfg(desktop)]

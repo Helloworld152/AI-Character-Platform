@@ -1,4 +1,7 @@
 {
   "productName": "AI Character Platform Tauri",
-  "identifier": "com.ai-character-platform.tauri"
+  "identifier": "com.ai-character-platform.tauri",
+  "bundle": {
+    "createUpdaterArtifacts": false
+  }
 }

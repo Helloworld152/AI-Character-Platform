@@ -21,6 +21,7 @@ compile.sh
 
 build/
 dist/
+plans/
 src-tauri/target/
 src-tauri/gen/
 *.spec

@@ -19,6 +19,8 @@
     "tauri:release:android": "tauri android build --apk --aab --config src-tauri/tauri.android.conf.json",
     "tauri:release:windows": "tauri build --bundles nsis,msi --config src-tauri/tauri.windows.conf.json",
     "tauri:release:macos": "tauri build --bundles app,dmg --config src-tauri/tauri.macos.conf.json",
+    "tauri:ci:windows": "tauri build --bundles nsis,msi --config src-tauri/tauri.windows.ci.conf.json",
+    "tauri:ci:macos": "tauri build --bundles app,dmg --config src-tauri/tauri.macos.ci.conf.json",
     "electron": "electron .",
     "start": "electron .",
     "dist": "npm run build:web && electron-builder --mac --publish never",
@@ -27,6 +29,8 @@
     "dist:win:portable": "npm run build:web && electron-builder --win portable"
   },
   "dependencies": {
+    "@tauri-apps/plugin-process": "^2.3.1",
+    "@tauri-apps/plugin-updater": "^2.10.1",
     "@vitejs/plugin-react": "^4.3.4",
     "electron-updater": "^6.8.9",
     "react": "^19.0.0",

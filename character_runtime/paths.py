@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 
-APP_NAME = "AI Character Platform"
+APP_NAME = "ai-character-platform"
 
 
 def get_app_root(explicit_root: Path | None = None) -> Path:

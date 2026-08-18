@@ -42,8 +42,9 @@ AI Character Platform 当前已经具备从选择角色、开始对话到持续�
 
 用户数据默认保存在系统用户目录，不放在应用安装目录里。
 
-- macOS：`~/Library/Application Support/AI Character Platform/`
-- Windows：`%APPDATA%/AI Character Platform/`
+- macOS：`~/Library/Application Support/ai-character-platform/`
+- Windows：`%APPDATA%/ai-character-platform/`
+- Linux：`$XDG_DATA_HOME/ai-character-platform/`，未设置时为 `~/.local/share/ai-character-platform/`
 
 这个目录里会保存：
 
@@ -320,6 +321,8 @@ latest.yml
 注意：
 
 - 自动更新依赖 `latest*.yml`
+- Tauri 自动更新另外依赖签名的 updater 包与 `latest.json`；私钥只能放在 CI Secret（`TAURI_SIGNING_PRIVATE_KEY`），不能提交到仓库。
+- 本地签名构建可使用 `TAURI_SIGNING_PRIVATE_KEY_PATH` 和 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`；GitHub Actions 需要配置同名的 `TAURI_SIGNING_PRIVATE_KEY`、`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` Secrets。
 - 版本号必须递增
 - 不要覆盖同一个版本的 release 来模拟更新
 

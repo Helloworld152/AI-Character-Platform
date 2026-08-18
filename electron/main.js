@@ -3,8 +3,28 @@ const { autoUpdater } = require("electron-updater");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const http = require("http");
+const os = require("os");
 const path = require("path");
 
+const DATA_DIRECTORY_NAME = "ai-character-platform";
+function resolveDataRoot() {
+  const configured = String(process.env.AI_CHARACTER_DATA_DIR || "").trim();
+  if (configured) {
+    return path.resolve(configured);
+  }
+
+  const home = os.homedir();
+  const base = process.platform === "darwin"
+    ? path.join(home, "Library", "Application Support")
+    : process.platform === "win32"
+      ? process.env.APPDATA || path.join(home, "AppData", "Roaming")
+      : process.env.XDG_DATA_HOME || path.join(home, ".local", "share");
+  return path.join(base, DATA_DIRECTORY_NAME);
+}
+
+const dataRoot = resolveDataRoot();
+fs.mkdirSync(dataRoot, { recursive: true });
+app.setPath("userData", dataRoot);
 const isPackaged = app.isPackaged;
 const root = isPackaged
   ? path.join(process.resourcesPath, "app.asar.unpacked")
@@ -13,7 +33,6 @@ const port = process.env.AI_CHARACTER_PORT || "8787";
 const host = "127.0.0.1";
 const url = `http://${host}:${port}`;
 const rendererUrl = process.env.VITE_DEV_SERVER_URL || url;
-const dataRoot = app.getPath("userData");
 const packagedBackend = process.platform === "win32"
   ? path.join(process.resourcesPath, "backend", "backend.exe")
   : null;

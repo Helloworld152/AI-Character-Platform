@@ -4,6 +4,7 @@ import "./styles.css";
 import { GalgameView } from "./galgame/GalgameView.jsx";
 import { toPlayScript } from "./galgame/adapter.js";
 import { ChoicePanel } from "./galgame/ChoicePanel.jsx";
+import { tauriUpdater } from "./desktopUpdater.js";
 
 // 打字机文本：新回复逐字显示，点击跳过，变化时通知滚动
 function TypewriterText({ text, skip = false, speed = 25, onProgress, onComplete }) {
@@ -163,6 +164,7 @@ function App() {
   const [activeCharacterId, setActiveCharacterId] = useState("");
   const [activeCharacter, setActiveCharacter] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [messagesLoading, setMessagesLoading] = useState(true);
   const [settings, setSettings] = useState(initialSettings);
   const [memories, setMemories] = useState([]);
   const [apiKey, setApiKey] = useState("");
@@ -201,7 +203,7 @@ function App() {
   const [skipTypingId, setSkipTypingId] = useState(null);
   const [typingAssistantId, setTypingAssistantId] = useState(null);
   const messageListRef = useRef(null);
-  const updater = window.aiCharacterUpdater;
+  const updater = window.aiCharacterUpdater || tauriUpdater;
   const desktop = window.aiCharacterDesktop || (
     !isAndroidTauri && window.__TAURI__?.core?.invoke
       ? {
@@ -250,10 +252,13 @@ function App() {
   async function boot() {
     try {
       await loadCharacters();
+      await loadMessages();
+      await loadPendingChoice();
       await loadSettings();
       await checkCharacterUpdates();
       setStatus("就绪");
     } catch (error) {
+      setMessagesLoading(false);
       setStatus(error.message);
     }
   }
@@ -303,17 +308,27 @@ function App() {
   }
 
   async function loadMessages() {
-    const payload = await requestJson("/api/messages?limit=30");
-    if (!payload.character) {
-      setActiveCharacter(null);
-      setMessages([]);
-      return;
+    setMessagesLoading(true);
+    try {
+      const payload = await requestJson("/api/messages?limit=30");
+      if (!payload.character) {
+        setActiveCharacter(null);
+        setMessages([]);
+        return;
+      }
+      setMessages(payload.messages);
+    } finally {
+      setMessagesLoading(false);
     }
-    setActiveCharacter((current) => ({
-      ...(current || {}),
-      ...normalizeCharacter(payload.character),
-    }));
-    setMessages(payload.messages);
+  }
+
+  async function loadPendingChoice() {
+    const payload = await requestJson("/api/pending-choice");
+    setPendingChoice(
+      payload.pending_choice && payload.character_id
+        ? { ...payload.pending_choice, characterId: payload.character_id }
+        : null,
+    );
   }
 
   async function loadSettings() {
@@ -383,6 +398,7 @@ function App() {
       return;
     }
     setCharacterSwitching(true);
+    setMessagesLoading(true);
     setStatus("切换中");
     try {
       await requestJson("/api/switch", {
@@ -396,10 +412,12 @@ function App() {
       setTypingAssistantId(null);
       await loadCharacters();
       await loadMessages();
+      await loadPendingChoice();
       setStatus("就绪");
     } catch (error) {
       setStatus(error.message);
     } finally {
+      setMessagesLoading(false);
       setCharacterSwitching(false);
     }
   }
@@ -854,7 +872,7 @@ function App() {
       setCharacters((current) =>
         current.map((character) =>
           character.id === nextCharacter.id
-            ? { ...character, background_url: backgroundUrl }
+            ? { ...character, background_url: nextCharacter.background_url }
             : character
         )
       );
@@ -1085,7 +1103,9 @@ function App() {
           </div>
         ) : (
           <div className="message-list" ref={messageListRef}>
-            {messages.length === 0 ? (
+            {messagesLoading ? (
+              <div className="empty-state">聊天记录加载中…</div>
+            ) : messages.length === 0 ? (
               <div className="empty-state">还没有聊天记录。发一句话开始这段会话。</div>
             ) : (
               messages.map((message) => {
