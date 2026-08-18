@@ -8,5 +8,6 @@
   "entry": "CHARACTER.md",
   "index": "INDEX.md",
   "avatar": "avatar/custom.jpg",
-  "portrait": "portrait/portrait.png"
+  "portrait": "portrait/portrait.png",
+  "background": "background/background.png"
 }
