@@ -152,6 +152,9 @@ function App() {
   const [deleteCharacterOpen, setDeleteCharacterOpen] = useState(false);
   const [deleteCharacterConfirmOpen, setDeleteCharacterConfirmOpen] = useState(false);
   const [deletingCharacter, setDeletingCharacter] = useState(false);
+  const [characterUpdates, setCharacterUpdates] = useState([]);
+  const [syncConfirmOpen, setSyncConfirmOpen] = useState(false);
+  const [syncingCharacters, setSyncingCharacters] = useState(false);
   const [galgameMode, setGalgameMode] = useState(false);
   const [portraitUploading, setPortraitUploading] = useState(false);
   const [backgroundUploading, setBackgroundUploading] = useState(false);
@@ -204,9 +207,46 @@ function App() {
     try {
       await loadCharacters();
       await loadSettings();
+      await checkCharacterUpdates();
       setStatus("就绪");
     } catch (error) {
       setStatus(error.message);
+    }
+  }
+
+  async function checkCharacterUpdates() {
+    try {
+      const payload = await requestJson("/api/character-updates");
+      if (payload.updates && payload.updates.length > 0) {
+        setCharacterUpdates(payload.updates);
+        setSyncConfirmOpen(true);
+      }
+    } catch (error) {
+      // 检测失败不阻塞启动
+    }
+  }
+
+  async function syncCharacterUpdates() {
+    if (syncingCharacters) {
+      return;
+    }
+    setSyncingCharacters(true);
+    setStatus("覆盖角色数据");
+    try {
+      await requestJson("/api/characters/sync-updates", {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      setSyncConfirmOpen(false);
+      setCharacterUpdates([]);
+      await loadCharacters();
+      await loadMessages();
+      setStatus("角色数据已更新");
+    } catch (error) {
+      setStatus(error.message);
+      setSyncConfirmOpen(false);
+    } finally {
+      setSyncingCharacters(false);
     }
   }
 
@@ -1470,6 +1510,35 @@ function App() {
               <button className="ghost-button" disabled={deletingCharacter} onClick={() => setDeleteCharacterConfirmOpen(false)} type="button">取消</button>
               <button className="danger-button" disabled={deletingCharacter} onClick={deleteCharacter} type="button">
                 {deletingCharacter ? "删除中" : "永久删除"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {syncConfirmOpen && (
+        <div className="confirm-layer">
+          <div className="confirm-backdrop" onClick={() => setSyncConfirmOpen(false)} />
+          <section aria-label="角色数据同步" className="confirm-dialog" role="dialog">
+            <div className="confirm-icon">↑</div>
+            <h3>检测到角色数据更新</h3>
+            <p>有新角色或角色素材更新（立绘/背景/资料），是否同步到本地？同步会替换对应角色的全部静态数据。</p>
+            <ul className="update-list">
+              {characterUpdates.map((item) => (
+                <li key={item.id}>
+                  <strong>{item.display_name}</strong>
+                  <span>
+                    {item.type === "new"
+                      ? "新增角色"
+                      : `${item.data_version || "?"} → ${item.app_version}`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className="confirm-actions">
+              <button className="ghost-button" disabled={syncingCharacters} onClick={() => setSyncConfirmOpen(false)} type="button">跳过</button>
+              <button className="save-button" disabled={syncingCharacters} onClick={syncCharacterUpdates} type="button">
+                {syncingCharacters ? "同步中…" : "同步"}
               </button>
             </div>
           </section>

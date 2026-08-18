@@ -3,6 +3,7 @@ from __future__ import annotations
 import cgi
 import json
 import os
+import shutil
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -65,6 +66,9 @@ class WebHandler(BaseHTTPRequestHandler):
         if path == "/api/characters":
             self._handle_characters()
             return
+        if path == "/api/character-updates":
+            self._handle_character_updates()
+            return
         if path == "/api/settings":
             self._handle_get_settings()
             return
@@ -105,6 +109,9 @@ class WebHandler(BaseHTTPRequestHandler):
                 return
             if path == "/api/characters/import":
                 self._handle_import_character()
+                return
+            if path == "/api/characters/sync-updates":
+                self._handle_sync_character_updates()
                 return
             if path == "/api/characters/avatar":
                 self._handle_update_avatar()
@@ -642,6 +649,97 @@ class WebHandler(BaseHTTPRequestHandler):
             }
         )
 
+    def _handle_character_updates(self) -> None:
+        """检测内置角色版本高于数据目录版本的角色（素材更新/新增角色）。
+
+        兼容场景：
+        - 数据目录无此角色（老版本没有/新增角色）→ 标记 type=new 提示安装
+        - 数据目录角色 manifest 无 version 字段（更老版本）→ 视为 0.0.0，提示覆盖
+        - 数据目录角色版本低于内置 → 标记 type=update 提示覆盖
+        """
+        updates = []
+        bundled_root = ROOT / "characters"
+        data_root = DATA_ROOT / "characters"
+        if not bundled_root.is_dir():
+            self._send_json({"updates": []})
+            return
+        for bundled in sorted(bundled_root.iterdir()):
+            if not bundled.is_dir():
+                continue
+            try:
+                manifest = json.loads((bundled / "manifest.json").read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            character_id = str(manifest.get("id", "")).strip()
+            app_version = str(manifest.get("version", "0.0.0")).strip() or "0.0.0"
+            if not character_id:
+                continue
+            display_name = manifest.get("display_name") or manifest.get("name") or character_id
+            data_manifest_path = data_root / character_id / "manifest.json"
+            if not data_manifest_path.is_file():
+                # 数据目录无此角色：新增角色，提示安装
+                updates.append(
+                    {
+                        "id": character_id,
+                        "display_name": display_name,
+                        "app_version": app_version,
+                        "data_version": None,
+                        "type": "new",
+                    }
+                )
+                continue
+            try:
+                data_manifest = json.loads(data_manifest_path.read_text(encoding="utf-8"))
+                data_version = str(data_manifest.get("version", "0.0.0")).strip() or "0.0.0"
+            except (json.JSONDecodeError, OSError):
+                data_version = "0.0.0"
+            if _version_compare(app_version, data_version) > 0:
+                updates.append(
+                    {
+                        "id": character_id,
+                        "display_name": display_name,
+                        "app_version": app_version,
+                        "data_version": data_version,
+                        "type": "update",
+                    }
+                )
+        self._send_json({"updates": updates})
+
+    def _handle_sync_character_updates(self) -> None:
+        """用户同意后：内置角色整目录覆盖到数据目录（含素材、资料、头像全部）。"""
+        bundled_root = ROOT / "characters"
+        data_root = DATA_ROOT / "characters"
+        if not bundled_root.is_dir():
+            self._send_json({"error": "内置角色目录不存在"}, status=404)
+            return
+        data_root.mkdir(parents=True, exist_ok=True)
+
+        synced: list[str] = []
+        with RUNTIME_LOCK:
+            for bundled in sorted(bundled_root.iterdir()):
+                if not bundled.is_dir():
+                    continue
+                try:
+                    manifest = json.loads((bundled / "manifest.json").read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, OSError):
+                    continue
+                character_id = str(manifest.get("id", "")).strip()
+                if not character_id:
+                    continue
+                destination = data_root / character_id
+                if destination.exists():
+                    shutil.rmtree(destination)
+                shutil.copytree(bundled, destination)
+                synced.append(character_id)
+
+            active = RUNTIME.character_manager.active_or_none()
+            active_character_id = active.id if active else None
+            RUNTIME.character_manager.reload()
+            if active_character_id:
+                RUNTIME.character_manager.activate(active_character_id)
+
+        self._send_json({"synced": synced})
+
     def _handle_shutdown(self) -> None:
         if self.client_address[0] not in {"127.0.0.1", "::1"}:
             self._send_json({"error": "forbidden"}, status=403)
@@ -756,6 +854,17 @@ class WebHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+
+def _version_compare(a: str, b: str) -> int:
+    """比较语义化版本：a > b 返回 1，a < b 返回 -1，相等返回 0。"""
+    pa = [int(part) for part in str(a).split(".") if part.isdigit()]
+    pb = [int(part) for part in str(b).split(".") if part.isdigit()]
+    while len(pa) < 3:
+        pa.append(0)
+    while len(pb) < 3:
+        pb.append(0)
+    return (pa > pb) - (pa < pb)
 
 
 def main() -> int:
