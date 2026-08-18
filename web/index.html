@@ -47,23 +47,16 @@
           <div class="panel-title">API 设置</div>
           <form id="settingsForm" class="settings-form">
             <label>
-              <span>模式</span>
-              <select id="llmMode">
-                <option value="auto">自动</option>
-                <option value="rulebased">本地规则</option>
-              </select>
-            </label>
-            <label>
-              <span>DeepSeek API Key</span>
+              <span>模型 API Key</span>
               <input id="apiKey" type="password" autocomplete="off" placeholder="不显示已保存 key">
             </label>
             <div id="apiKeyPreview" class="settings-note">未配置</div>
             <label>
-              <span>模型</span>
+              <span>模型（默认 DeepSeek）</span>
               <input id="model" type="text" value="deepseek-v4-flash">
             </label>
             <label>
-              <span>Base URL</span>
+              <span>Base URL（支持 OpenAI 兼容接口）</span>
               <input id="baseUrl" type="text" value="https://api.deepseek.com">
             </label>
             <div class="settings-grid">

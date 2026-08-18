@@ -26,27 +26,13 @@ class ConversationEngine:
         self._memory = memory
         self._memory_extractor = memory_extractor
         self._user_id = user_id
-        self._sessions: dict[str, list[Message]] = {}
         # 挂起的提问：choice_id → {session_id, character_id, question, prompt, options, multi_select, allow_custom, created_at}
         self._pending_choices: dict[str, dict] = {}
+        # Galgame 中已生成、等待玩家点击“继续”后显示的下一轮选项。
+        self._deferred_choices: dict[tuple[int, str], dict] = {}
 
     def send_message(self, character: Character, user_message: str) -> tuple[str, dict | None]:
         session_id = self._database.get_or_create_session(self._user_id, character.id)
-
-        # 预设分支：角色包 choices.json 命中触发词 → 稳定触发，不走模型
-        preset = self._match_preset_choice(character, user_message)
-        if preset is not None:
-            self._database.append_message(session_id, "user", user_message)
-            prompt = str(preset.get("prompt", "")).strip() or "……"
-            self._database.append_message(session_id, "assistant", prompt)
-            pending = {
-                "question": str(preset.get("question", "")).strip(),
-                "prompt": prompt,
-                "options": preset.get("options", []),
-                "multi_select": bool(preset.get("multi_select", False)),
-                "allow_custom": bool(preset.get("allow_custom", False)),
-            }
-            return prompt, self._register_pending_choice(session_id, character.id, pending)
 
         history = self._database.load_recent_messages(session_id, limit=80)
         history.append(Message(role="user", content=user_message))
@@ -55,27 +41,15 @@ class ConversationEngine:
         state = AgentState(
             character=character,
             user_id=self._user_id,
+            interaction_mode="chat",
             recent_messages=list(history),
             current_user_message=user_message,
         )
         response = self._agent.respond(state)
         self._database.append_message(session_id, "assistant", response)
 
-        pending = state.pending_choice
-        if pending is not None:
-            # 回合挂起：引导语已落库，等待玩家选择
-            return response, self._register_pending_choice(session_id, character.id, pending)
-
         self._extract_memory(character, user_message, response)
         return response, None
-
-    @staticmethod
-    def _match_preset_choice(character: Character, message: str) -> dict | None:
-        for preset in character.choices:
-            for trigger in preset.get("triggers", []):
-                if trigger and trigger in message:
-                    return preset
-        return None
 
     def _register_pending_choice(self, session_id: int, character_id: str, pending: dict) -> dict:
         choice_id = uuid.uuid4().hex[:12]
@@ -106,8 +80,9 @@ class ConversationEngine:
         selected: list[str] | None = None,
         custom: str = "",
         cancelled: bool = False,
-    ) -> str | None:
-        """回答挂起的提问。取消时返回 None（不落库）；正常回答返回角色继续的回复。"""
+        galgame_mode: bool = False,
+    ) -> tuple[str | None, dict | None]:
+        """回答挂起的提问，并返回角色回复和下一选项。"""
         pending = self._pending_choices.get(choice_id)
         if pending is None:
             raise KeyError("问题已过期或不存在")
@@ -117,7 +92,8 @@ class ConversationEngine:
 
         session_id = pending["session_id"]
         if cancelled:
-            return None
+            self._deferred_choices.pop((session_id, character.id), None)
+            return None, None
 
         selected = [str(item).strip() for item in (selected or []) if str(item).strip()]
         custom = str(custom or "").strip()
@@ -131,13 +107,45 @@ class ConversationEngine:
         state = AgentState(
             character=character,
             user_id=self._user_id,
+            interaction_mode="galgame" if galgame_mode else "chat",
+            turn_phase="choice_response" if galgame_mode else "",
             recent_messages=list(history),
             current_user_message=answer_text,
         )
         response = self._agent.respond(state)
         self._database.append_message(session_id, "assistant", response)
+
+        next_choice = None
+        if state.pending_choice is not None:
+            if galgame_mode:
+                self._deferred_choices[(session_id, character.id)] = state.pending_choice
+            else:
+                next_choice = self._register_pending_choice(session_id, character.id, state.pending_choice)
         self._extract_memory(character, answer_text, response)
-        return response
+        return response, next_choice
+
+    def continue_story(self, character: Character) -> tuple[str | None, dict | None]:
+        session_id = self._database.get_or_create_session(self._user_id, character.id)
+        key = (session_id, character.id)
+        deferred = self._deferred_choices.pop(key, None)
+        if deferred is not None:
+            return None, self._register_pending_choice(session_id, character.id, deferred)
+
+        history = self._database.load_recent_messages(session_id, limit=80)
+        state = AgentState(
+            character=character,
+            user_id=self._user_id,
+            interaction_mode="galgame",
+            turn_phase="continue",
+            recent_messages=list(history),
+            current_user_message="[玩家点击继续]",
+        )
+        response = self._agent.respond(state)
+        self._database.append_message(session_id, "assistant", response)
+        next_choice = None
+        if state.pending_choice is not None:
+            next_choice = self._register_pending_choice(session_id, character.id, state.pending_choice)
+        return response, next_choice
 
     def load_messages(self, character: Character, limit: int = 100) -> list[dict]:
         session_id = self._database.get_or_create_session(self._user_id, character.id)

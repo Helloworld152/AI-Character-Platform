@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
-import os
 from pathlib import Path
 import shutil
 
@@ -11,7 +10,7 @@ from character_runtime.character_manager import CharacterManager
 from character_runtime.config import load_dotenv
 from character_runtime.conversation import ConversationEngine
 from character_runtime.database import Database
-from character_runtime.llm import DeepSeekClient, RuleBasedLlmClient
+from character_runtime.llm import OpenAICompatibleClient
 from character_runtime.memory_extractor import MemoryExtractor
 from character_runtime.memory import MemoryManager
 from character_runtime.paths import get_app_root, get_data_root
@@ -46,11 +45,7 @@ def create_runtime(root: Path | None = None, data_root: Path | None = None) -> R
     memory_extractor = MemoryExtractor.from_environment()
     voice = VoiceManager()
 
-    llm_mode = os.environ.get("AI_CHARACTER_LLM", "auto").strip().lower()
-    if llm_mode == "rulebased":
-        llm = RuleBasedLlmClient()
-    else:
-        llm = DeepSeekClient.from_environment() or RuleBasedLlmClient()
+    llm = OpenAICompatibleClient.from_environment()
     conversation = ConversationEngine(
         CharacterAgent(
             llm=llm,

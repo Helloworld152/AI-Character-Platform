@@ -23,7 +23,6 @@ const toolResults = document.querySelector("#toolResults");
 const temperature = document.querySelector("#temperature");
 const timeoutSeconds = document.querySelector("#timeoutSeconds");
 const thinking = document.querySelector("#thinking");
-const llmMode = document.querySelector("#llmMode");
 
 function setStatus(text) {
   statusEl.textContent = text;
@@ -136,7 +135,6 @@ async function loadSettings() {
   temperature.value = settings.temperature;
   timeoutSeconds.value = settings.timeout_seconds;
   thinking.value = settings.thinking;
-  llmMode.value = settings.llm_mode;
 }
 
 async function switchCharacter(characterId) {
@@ -219,7 +217,6 @@ settingsForm.addEventListener("submit", async (event) => {
           temperature: temperature.value,
           timeout_seconds: timeoutSeconds.value,
           thinking: thinking.value,
-          llm_mode: llmMode.value,
         },
       }),
     });

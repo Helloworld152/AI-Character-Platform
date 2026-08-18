@@ -10,12 +10,11 @@ const DEFAULT_SETTINGS = {
   bounce: true,
 };
 
-// Galgame 主视图：立绘全屏舞台 + 底部浮层（对话框+输入条）+ 历史/设置抽屉
+// Galgame 主视图：立绘全屏舞台 + 底部剧本对话框 + 历史/设置抽屉
 export function GalgameView({
   character,
   script,
   thinking,
-  onSendMessage,
   onUploadPortrait,
   portraitUploading,
   backgroundUrl,
@@ -23,28 +22,19 @@ export function GalgameView({
   backgroundUploading,
   pendingChoice,
   choiceBusy,
+  continueBusy,
   onAnswerChoice,
   onCancelChoice,
+  onContinue,
 }) {
   const [backlogOpen, setBacklogOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [autoMode, setAutoMode] = useState(true);
-  const [input, setInput] = useState("");
 
   const displayName = character?.display_name || "角色";
   const portraitUrl = character?.portrait_url || null;
   const avatarUrl = character?.avatar_url || null;
-
-  const handleSend = (event) => {
-    event.preventDefault();
-    const text = input.trim();
-    if (!text) {
-      return;
-    }
-    setInput("");
-    onSendMessage(text);
-  };
 
   const updateSetting = (key, value) => {
     setSettings((current) => ({ ...current, [key]: value }));
@@ -96,6 +86,7 @@ export function GalgameView({
         {backgroundUrl && <div className="gg-background"><img alt="" src={backgroundUrl} /></div>}
         <Stage
           avatarUrl={avatarUrl}
+          key={`${character?.id || "none"}:${portraitUrl || ""}:${avatarUrl || ""}`}
           portraitUrl={portraitUrl}
           speaking={settings.bounce}
           thinking={thinking}
@@ -103,7 +94,7 @@ export function GalgameView({
         {!hasScript && (
           <div className="gg-empty">
             <strong>演出尚未开始</strong>
-            <p>去「聊天」界面和角色说一句话，再回到这里欣赏演出。立绘可以在上方上传。</p>
+            <p>点击右下角继续按钮开始推进剧情。自由聊天请切换到「聊天」模式，立绘可以在上方上传。</p>
           </div>
         )}
         {pendingChoice && (
@@ -115,37 +106,21 @@ export function GalgameView({
             variant="stage"
           />
         )}
-        {hasScript && (
+        {character && (
           <div className="gg-stage-overlay">
-              <DialogueBox
-                autoAdvanceMs={settings.autoAdvanceMs}
-                autoMode={autoMode}
-                key={character?.id || "none"}
-                onAutoModeChange={setAutoMode}
-                script={script}
-                typewriterMs={settings.typewriterMs}
-              />
-              <form className="gg-input-area" onSubmit={handleSend}>
-                <div className="gg-input-box">
-                  <textarea
-                    className="gg-input-field"
-                    onChange={(event) => setInput(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" && !event.shiftKey) {
-                        event.preventDefault();
-                        event.currentTarget.form?.requestSubmit();
-                      }
-                    }}
-                    placeholder="插话或引导剧情…"
-                    rows={1}
-                    value={input}
-                  />
-                  <button className="gg-input-send" disabled={!input.trim()} type="submit">
-                    ➤
-                  </button>
-                </div>
-              </form>
-            </div>
+            <DialogueBox
+              autoAdvanceMs={settings.autoAdvanceMs}
+              autoMode={autoMode}
+              characterName={displayName}
+              continueBusy={continueBusy}
+              continueDisabled={Boolean(pendingChoice)}
+              key={character?.id || "none"}
+              onAutoModeChange={setAutoMode}
+              onContinue={onContinue}
+              script={script}
+              typewriterMs={settings.typewriterMs}
+            />
+          </div>
         )}
       </div>
 

@@ -9,30 +9,49 @@ function resolveInitialPosition(script) {
 }
 
 // 台词对话框：打字机逐字 + 点击推进 + 翻页 + 自动模式
-export function DialogueBox({ script, typewriterMs, autoAdvanceMs, autoMode, onAutoModeChange }) {
+export function DialogueBox({
+  script,
+  typewriterMs,
+  autoAdvanceMs,
+  autoMode,
+  onAutoModeChange,
+  characterName = "角色",
+  onContinue,
+  continueBusy = false,
+  continueDisabled = false,
+}) {
   const [initialPosition] = useState(() => resolveInitialPosition(script));
   const [turnIndex, setTurnIndex] = useState(initialPosition.turn);
   const [chunkIndex, setChunkIndex] = useState(initialPosition.chunk);
   const [typedCount, setTypedCount] = useState(initialPosition.fullLength);
+  const [typewriterTurn, setTypewriterTurn] = useState(false);
   const [interacted, setInteracted] = useState(false);
   const boxRef = useRef(null);
 
-  const current = script[Math.min(turnIndex, script.length - 1)];
-  const chunk = current?.chunks?.[Math.min(chunkIndex, current.chunks.length - 1)] || "";
-  const isLast = turnIndex >= script.length - 1 && chunkIndex >= (current?.chunks?.length || 1) - 1;
-  const typing = typedCount < chunk.length;
+  const lastTurnIndex = Math.max(script.length - 1, 0);
+  const safeTurnIndex = Math.min(Math.max(turnIndex, 0), lastTurnIndex);
+  const current = script[safeTurnIndex];
+  const lastChunkIndex = Math.max((current?.chunks?.length || 1) - 1, 0);
+  const safeChunkIndex = Math.min(Math.max(chunkIndex, 0), lastChunkIndex);
+  const chunk = current?.chunks?.[safeChunkIndex] || "";
+  const isLast = script.length === 0 || (safeTurnIndex >= lastTurnIndex && safeChunkIndex >= lastChunkIndex);
+  const typing = typewriterTurn && typedCount < chunk.length;
 
   const advance = () => {
     if (!current) {
       return;
     }
-    if (chunkIndex < current.chunks.length - 1) {
-      setChunkIndex((value) => value + 1);
-      setTypedCount(0);
-    } else if (turnIndex < script.length - 1) {
-      setTurnIndex((value) => value + 1);
+    if (safeChunkIndex < current.chunks.length - 1) {
+      const nextChunk = current.chunks[safeChunkIndex + 1] || "";
+      setChunkIndex(safeChunkIndex + 1);
+      setTypedCount(typewriterTurn ? 0 : nextChunk.length);
+    } else if (safeTurnIndex < lastTurnIndex) {
+      const nextTurn = script[safeTurnIndex + 1];
+      const nextChunk = nextTurn?.chunks?.[0] || "";
+      setTurnIndex(safeTurnIndex + 1);
       setChunkIndex(0);
-      setTypedCount(0);
+      setTypewriterTurn(false);
+      setTypedCount(nextChunk.length);
     }
   };
 
@@ -52,13 +71,47 @@ export function DialogueBox({ script, typewriterMs, autoAdvanceMs, autoMode, onA
     return undefined;
   }, [chunk, typedCount, autoMode, interacted, isLast]);
 
-  // 新消息到达：自动跟随到最新一句并从打字机开始播放
+  // 新消息到达：仅当前角色会话的第一次角色回复播放打字机
   const lastScriptLength = useRef(script.length);
+  const scriptInitialized = useRef(script.length > 0);
+  const hasPlayedGeneration = useRef(false);
   useEffect(() => {
+    if (!scriptInitialized.current) {
+      if (script.length > 0) {
+        const nextTurn = script[script.length - 1];
+        const nextChunk = nextTurn?.chunks?.[0] || "";
+        const shouldType = nextTurn?.speaker === "character" && !hasPlayedGeneration.current;
+        if (nextTurn?.speaker === "character") {
+          hasPlayedGeneration.current = true;
+        }
+        lastScriptLength.current = script.length;
+        scriptInitialized.current = true;
+        setTurnIndex(script.length - 1);
+        setChunkIndex(0);
+        setTypewriterTurn(shouldType);
+        setTypedCount(shouldType ? 0 : nextChunk.length);
+        setInteracted(false);
+      }
+      return;
+    }
+    if (script.length < lastScriptLength.current) {
+      const position = resolveInitialPosition(script);
+      setTurnIndex(position.turn);
+      setChunkIndex(position.chunk);
+      setTypewriterTurn(false);
+      setTypedCount(position.fullLength);
+    }
     if (script.length > lastScriptLength.current) {
+      const nextTurn = script[script.length - 1];
+      const nextChunk = nextTurn?.chunks?.[0] || "";
+      const shouldType = nextTurn?.speaker === "character" && !hasPlayedGeneration.current;
+      if (nextTurn?.speaker === "character") {
+        hasPlayedGeneration.current = true;
+      }
       setTurnIndex(script.length - 1);
       setChunkIndex(0);
-      setTypedCount(0);
+      setTypewriterTurn(shouldType);
+      setTypedCount(shouldType ? 0 : nextChunk.length);
       setInteracted(false);
     }
     lastScriptLength.current = script.length;
@@ -83,9 +136,14 @@ export function DialogueBox({ script, typewriterMs, autoAdvanceMs, autoMode, onA
   };
 
   const jumpTo = (turn, index) => {
-    setTurnIndex(turn);
-    setChunkIndex(index);
-    setTypedCount(0);
+    const targetTurn = Math.min(Math.max(turn, 0), lastTurnIndex);
+    const targetLastChunk = Math.max((script[targetTurn]?.chunks?.length || 1) - 1, 0);
+    const targetIndex = Math.min(Math.max(index, 0), targetLastChunk);
+    const targetChunk = script[targetTurn]?.chunks?.[targetIndex] || "";
+    setTurnIndex(targetTurn);
+    setChunkIndex(targetIndex);
+    setTypewriterTurn(false);
+    setTypedCount(targetChunk.length);
   };
 
   const showAutoHint = autoMode && !interacted && !isLast;
@@ -93,29 +151,46 @@ export function DialogueBox({ script, typewriterMs, autoAdvanceMs, autoMode, onA
   return (
     <div className="gg-dialogue-area">
       <div className={`gg-nameplate${current?.speaker === "player" ? " player" : ""}`}>
-        {current?.name || "…"}
+        {current?.name || characterName}
       </div>
       <div
         className={`gg-dialogue-box${typing ? " gg-dialogue-typing" : ""}`}
         onClick={handleClick}
-        ref={boxRef}
         role="button"
         tabIndex={0}
       >
-        <div className="gg-dialogue-body">{chunk.slice(0, typedCount)}</div>
-        {!chunk && <span className="gg-dialogue-placeholder">（等待下一句…）</span>}
+        <div className="gg-dialogue-scroll" ref={boxRef}>
+          <div className="gg-dialogue-body">{chunk.slice(0, typedCount)}</div>
+          {!chunk && <span className="gg-dialogue-placeholder">（等待下一句…）</span>}
+        </div>
         <div className="gg-controls">
+          <button
+            aria-label={continueBusy ? "正在推进剧情" : "继续剧情"}
+            className="gg-continue"
+            disabled={continueBusy || continueDisabled}
+            onClick={(event) => {
+              event.stopPropagation();
+              onContinue?.();
+            }}
+            title={continueBusy ? "正在推进剧情" : continueDisabled ? "请先完成当前选择" : "继续剧情"}
+            type="button"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M8 5.5v13L18.5 12 8 5.5Z" />
+            </svg>
+          </button>
           <button
             aria-label="上一句"
             className="gg-nav"
-            disabled={turnIndex === 0 && chunkIndex === 0}
-            onClick={() => {
+            disabled={safeTurnIndex === 0 && safeChunkIndex === 0}
+            onClick={(event) => {
+              event.stopPropagation();
               setInteracted(true);
               onAutoModeChange?.(false);
-              if (chunkIndex > 0) {
-                jumpTo(turnIndex, chunkIndex - 1);
-              } else if (turnIndex > 0) {
-                jumpTo(turnIndex - 1, script[turnIndex - 1].chunks.length - 1);
+              if (safeChunkIndex > 0) {
+                jumpTo(safeTurnIndex, safeChunkIndex - 1);
+              } else if (safeTurnIndex > 0) {
+                jumpTo(safeTurnIndex - 1, (script[safeTurnIndex - 1]?.chunks?.length || 1) - 1);
               }
             }}
             type="button"
@@ -123,7 +198,7 @@ export function DialogueBox({ script, typewriterMs, autoAdvanceMs, autoMode, onA
             ◀
           </button>
           <span className="gg-position">
-            {turnIndex + 1}/{script.length}
+            {safeTurnIndex + 1}/{script.length}
           </span>
           {showAutoHint ? (
             <span className="gg-auto-hint">自动</span>
@@ -134,7 +209,8 @@ export function DialogueBox({ script, typewriterMs, autoAdvanceMs, autoMode, onA
             aria-label="下一句"
             className="gg-nav"
             disabled={isLast}
-            onClick={() => {
+            onClick={(event) => {
+              event.stopPropagation();
               setInteracted(true);
               onAutoModeChange?.(false);
               advance();
