@@ -75,6 +75,9 @@ class WebHandler(BaseHTTPRequestHandler):
         if path == "/api/messages":
             self._handle_messages()
             return
+        if path == "/api/pending-choice":
+            self._handle_pending_choice()
+            return
         if path == "/api/memories":
             self._handle_memories()
             return
@@ -276,6 +279,21 @@ class WebHandler(BaseHTTPRequestHandler):
 
     def _handle_get_settings(self) -> None:
         self._send_json({"settings": _read_settings()})
+
+    def _handle_pending_choice(self) -> None:
+        with RUNTIME_LOCK:
+            character = RUNTIME.character_manager.active_or_none()
+            pending_choice = (
+                RUNTIME.conversation.get_pending_choice(character.id)
+                if character is not None
+                else None
+            )
+        self._send_json(
+            {
+                "character_id": character.id if character is not None else None,
+                "pending_choice": pending_choice,
+            }
+        )
 
     def _handle_memories(self) -> None:
         query = parse_qs(urlparse(self.path).query)

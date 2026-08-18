@@ -64,6 +64,22 @@ class ConversationEngine:
             "allow_custom": pending["allow_custom"],
             "created_at": int(time.time()),
         }
+        return self._choice_payload(choice_id, self._pending_choices[choice_id])
+
+    def get_pending_choice(self, character_id: str) -> dict | None:
+        self._expire_stale_choices()
+        choices = [
+            (choice_id, pending)
+            for choice_id, pending in self._pending_choices.items()
+            if pending["character_id"] == character_id
+        ]
+        if not choices:
+            return None
+        choice_id, pending = max(choices, key=lambda item: item[1]["created_at"])
+        return self._choice_payload(choice_id, pending)
+
+    @staticmethod
+    def _choice_payload(choice_id: str, pending: dict) -> dict:
         return {
             "choice_id": choice_id,
             "question": pending["question"],
@@ -125,6 +141,10 @@ class ConversationEngine:
         return response, next_choice
 
     def continue_story(self, character: Character) -> tuple[str | None, dict | None]:
+        pending_choice = self.get_pending_choice(character.id)
+        if pending_choice is not None:
+            return None, pending_choice
+
         session_id = self._database.get_or_create_session(self._user_id, character.id)
         key = (session_id, character.id)
         deferred = self._deferred_choices.pop(key, None)

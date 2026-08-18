@@ -206,6 +206,7 @@ function App() {
   async function boot() {
     try {
       await loadCharacters();
+      await loadPendingChoice();
       await loadSettings();
       await checkCharacterUpdates();
       setStatus("就绪");
@@ -269,6 +270,15 @@ function App() {
       ...payload.character,
     }));
     setMessages(payload.messages);
+  }
+
+  async function loadPendingChoice() {
+    const payload = await requestJson("/api/pending-choice");
+    setPendingChoice(
+      payload.pending_choice && payload.character_id
+        ? { ...payload.pending_choice, characterId: payload.character_id }
+        : null,
+    );
   }
 
   async function loadSettings() {
@@ -351,6 +361,7 @@ function App() {
       setTypingAssistantId(null);
       await loadCharacters();
       await loadMessages();
+      await loadPendingChoice();
       setStatus("就绪");
     } catch (error) {
       setStatus(error.message);
