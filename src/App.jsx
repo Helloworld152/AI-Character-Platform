@@ -48,8 +48,45 @@ const initialSettings = {
   tool_results: "8",
 };
 
+const isAndroidTauri = Boolean(window.__TAURI__) && /Android/i.test(navigator.userAgent);
+const isTauriProduction = Boolean(window.__TAURI__) && !import.meta.env.DEV;
+const configuredBackendUrl = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const backendBaseUrl = configuredBackendUrl || (
+  isTauriProduction && !isAndroidTauri ? "http://127.0.0.1:8787" : ""
+);
+
+function backendUrl(url) {
+  if (!url || !backendBaseUrl || /^https?:\/\//.test(url)) {
+    return url;
+  }
+  return `${backendBaseUrl}${url}`;
+}
+
+function normalizeCharacter(character) {
+  if (!character) {
+    return character;
+  }
+  return {
+    ...character,
+    avatar_url: backendUrl(character.avatar_url),
+    portrait_url: backendUrl(character.portrait_url),
+    background_url: backendUrl(character.background_url),
+  };
+}
+
+function withCacheBust(url) {
+  const normalizedUrl = backendUrl(url);
+  if (!normalizedUrl) {
+    return normalizedUrl;
+  }
+  const cacheBust = `t=${Date.now()}`;
+  return normalizedUrl.includes("?")
+    ? `${normalizedUrl}&${cacheBust}`
+    : `${normalizedUrl}?${cacheBust}`;
+}
+
 async function requestJson(url, options = {}) {
-  const response = await fetch(url, {
+  const response = await fetch(backendUrl(url), {
     headers: { "Content-Type": "application/json" },
     ...options,
   });
@@ -165,7 +202,14 @@ function App() {
   const [typingAssistantId, setTypingAssistantId] = useState(null);
   const messageListRef = useRef(null);
   const updater = window.aiCharacterUpdater;
-  const desktop = window.aiCharacterDesktop;
+  const desktop = window.aiCharacterDesktop || (
+    !isAndroidTauri && window.__TAURI__?.core?.invoke
+      ? {
+          openCharacterDirectory: (characterId) =>
+            window.__TAURI__.core.invoke("open_character_directory", { characterId }),
+        }
+      : null
+  );
   const pendingForActive =
     pendingChoice && pendingChoice.characterId === activeCharacterId ? pendingChoice : null;
 
@@ -252,9 +296,10 @@ function App() {
 
   async function loadCharacters() {
     const payload = await requestJson("/api/characters");
-    setCharacters(payload.characters);
+    const nextCharacters = payload.characters.map(normalizeCharacter);
+    setCharacters(nextCharacters);
     setActiveCharacterId(payload.active_character_id || "");
-    setActiveCharacter(payload.characters.find((item) => item.active) || null);
+    setActiveCharacter(nextCharacters.find((item) => item.active) || null);
   }
 
   async function loadMessages() {
@@ -266,7 +311,7 @@ function App() {
     }
     setActiveCharacter((current) => ({
       ...(current || {}),
-      ...payload.character,
+      ...normalizeCharacter(payload.character),
     }));
     setMessages(payload.messages);
   }
@@ -662,7 +707,7 @@ function App() {
       form.append("version", importDraft.version.trim() || "1.0.0");
       form.append("avatar", importDraft.avatar);
       form.append("package", importDraft.package);
-      const response = await fetch("/api/characters/import", {
+      const response = await fetch(backendUrl("/api/characters/import"), {
         method: "POST",
         body: form,
       });
@@ -696,7 +741,7 @@ function App() {
       const form = new FormData();
       form.append("character_id", activeCharacterId);
       form.append("avatar", file);
-      const response = await fetch("/api/characters/avatar", {
+      const response = await fetch(backendUrl("/api/characters/avatar"), {
         method: "POST",
         body: form,
       });
@@ -705,11 +750,10 @@ function App() {
         throw new Error(payload.error || "头像上传失败");
       }
 
-      const cacheBust = `t=${Date.now()}`;
-      const avatarUrl = payload.character.avatar_url.includes("?")
-        ? `${payload.character.avatar_url}&${cacheBust}`
-        : `${payload.character.avatar_url}?${cacheBust}`;
-      const nextCharacter = { ...payload.character, avatar_url: avatarUrl };
+      const nextCharacter = {
+        ...normalizeCharacter(payload.character),
+        avatar_url: withCacheBust(payload.character.avatar_url),
+      };
 
       setActiveCharacter((current) => ({
         ...(current || {}),
@@ -718,7 +762,7 @@ function App() {
       setCharacters((current) =>
         current.map((character) =>
           character.id === nextCharacter.id
-            ? { ...character, avatar_url: avatarUrl }
+            ? { ...character, avatar_url: nextCharacter.avatar_url }
             : character
         )
       );
@@ -743,7 +787,7 @@ function App() {
       const form = new FormData();
       form.append("character_id", activeCharacterId);
       form.append("portrait", file);
-      const response = await fetch("/api/characters/portrait", {
+      const response = await fetch(backendUrl("/api/characters/portrait"), {
         method: "POST",
         body: form,
       });
@@ -752,11 +796,10 @@ function App() {
         throw new Error(payload.error || "立绘上传失败");
       }
 
-      const cacheBust = `t=${Date.now()}`;
-      const portraitUrl = payload.character.portrait_url.includes("?")
-        ? `${payload.character.portrait_url}&${cacheBust}`
-        : `${payload.character.portrait_url}?${cacheBust}`;
-      const nextCharacter = { ...payload.character, portrait_url: portraitUrl };
+      const nextCharacter = {
+        ...normalizeCharacter(payload.character),
+        portrait_url: withCacheBust(payload.character.portrait_url),
+      };
 
       setActiveCharacter((current) => ({
         ...(current || {}),
@@ -765,7 +808,7 @@ function App() {
       setCharacters((current) =>
         current.map((character) =>
           character.id === nextCharacter.id
-            ? { ...character, portrait_url: portraitUrl }
+            ? { ...character, portrait_url: nextCharacter.portrait_url }
             : character
         )
       );
@@ -790,7 +833,7 @@ function App() {
       const form = new FormData();
       form.append("character_id", activeCharacterId);
       form.append("background", file);
-      const response = await fetch("/api/characters/background", {
+      const response = await fetch(backendUrl("/api/characters/background"), {
         method: "POST",
         body: form,
       });
@@ -799,11 +842,10 @@ function App() {
         throw new Error(payload.error || "背景上传失败");
       }
 
-      const cacheBust = `t=${Date.now()}`;
-      const backgroundUrl = payload.character.background_url.includes("?")
-        ? `${payload.character.background_url}&${cacheBust}`
-        : `${payload.character.background_url}?${cacheBust}`;
-      const nextCharacter = { ...payload.character, background_url: backgroundUrl };
+      const nextCharacter = {
+        ...normalizeCharacter(payload.character),
+        background_url: withCacheBust(payload.character.background_url),
+      };
 
       setActiveCharacter((current) => ({
         ...(current || {}),

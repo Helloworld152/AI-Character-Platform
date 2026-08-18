@@ -1,0 +1,16 @@
+[package]
+name = "ai-character-platform"
+version = "0.1.13"
+description = "AI Character Platform Tauri desktop client"
+authors = ["AI Character Platform"]
+edition = "2021"
+
+[lib]
+name = "ai_character_platform_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }

@@ -139,11 +139,130 @@ jobs:
             release/latest.yml
           if-no-files-found: error
 
+  build-tauri-macos:
+    name: Build Tauri macOS release assets
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Tauri macOS release
+        run: npm run tauri:release:macos -- --ci --no-sign
+
+      - name: Upload Tauri macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-macos-release
+          path: |
+            src-tauri/target/release/bundle/dmg/*
+            src-tauri/target/release/bundle/macos/*
+          if-no-files-found: error
+
+  build-tauri-windows:
+    name: Build Tauri Windows release assets
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Tauri Windows release
+        shell: pwsh
+        run: npm run tauri:release:windows -- --ci --no-sign
+
+      - name: Upload Tauri Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-windows-release
+          path: |
+            src-tauri/target/release/bundle/nsis/*
+            src-tauri/target/release/bundle/msi/*
+          if-no-files-found: error
+
+  build-tauri-android:
+    name: Build Tauri Android release assets
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "ndk;27.2.12479018"
+          echo "ANDROID_HOME=${ANDROID_HOME}" >> "$GITHUB_ENV"
+          echo "NDK_HOME=${ANDROID_HOME}/ndk/27.2.12479018" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Rust Android targets
+        shell: bash
+        run: rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+
+      - name: Initialize Tauri Android project
+        run: npm run tauri:android:init -- --ci --skip-targets-install
+
+      - name: Build Tauri Android release
+        run: npm run tauri:release:android -- --ci
+
+      - name: Upload Tauri Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-android-release
+          path: |
+            src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+            src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
+          if-no-files-found: error
+
   publish-release:
     name: Publish GitHub Release
     needs:
       - build-macos
       - build-windows
+      - build-tauri-macos
+      - build-tauri-windows
+      - build-tauri-android
     runs-on: ubuntu-24.04
 
     steps:

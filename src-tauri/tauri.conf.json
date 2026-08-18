@@ -1,0 +1,44 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "AI Character Platform Tauri",
+  "version": "0.1.13",
+  "identifier": "com.ai-character-platform.tauri",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build:web",
+    "devUrl": "http://127.0.0.1:5173",
+    "frontendDist": "../dist-web"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "security": {
+      "csp": null
+    },
+    "windows": [
+      {
+        "label": "main",
+        "title": "AI Character Platform Tauri",
+        "width": 1240,
+        "height": 820,
+        "minWidth": 980,
+        "minHeight": 680,
+        "resizable": true
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Utility",
+    "shortDescription": "本地 AI 角色长期互动平台",
+    "resources": {
+      "../web_server.py": "runtime/web_server.py",
+      "../character_runtime": "runtime/character_runtime",
+      "../characters": "runtime/characters",
+      "../dist-web": "runtime/dist-web",
+      "../main.py": "runtime/main.py",
+      "../pyproject.toml": "runtime/pyproject.toml",
+      "../.env.example": "runtime/.env.example"
+    }
+  }
+}

@@ -1,0 +1,180 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-electron-macos:
+    name: Build Electron macOS
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Electron macOS
+        run: bash scripts/build-macos-dmg.sh
+
+  build-electron-windows:
+    name: Build Electron Windows
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web assets
+        shell: pwsh
+        run: |
+          npm run build:web
+          if (!(Test-Path "dist-web\index.html")) {
+            throw "dist-web\index.html was not generated."
+          }
+
+      - name: Install PyInstaller
+        shell: pwsh
+        run: python -m pip install --upgrade pyinstaller
+
+      - name: Build Python backend
+        shell: pwsh
+        run: |
+          python -m PyInstaller `
+            --name backend `
+            --onedir `
+            --noconsole `
+            --clean `
+            --add-data "character_runtime;character_runtime" `
+            --add-data "characters;characters" `
+            --add-data "dist-web;dist-web" `
+            --add-data ".env.example;." `
+            web_server.py
+          if (!(Test-Path "dist\backend\backend.exe")) {
+            throw "dist\backend\backend.exe was not generated."
+          }
+
+      - name: Build Electron Windows
+        shell: pwsh
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npx electron-builder --win nsis portable --publish never
+
+  build-tauri-macos:
+    name: Build Tauri macOS
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Tauri macOS
+        run: npm run tauri:release:macos -- --ci --no-sign
+
+  build-tauri-windows:
+    name: Build Tauri Windows
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Tauri Windows
+        shell: pwsh
+        run: npm run tauri:release:windows -- --ci --no-sign
+
+  build-tauri-android:
+    name: Build Tauri Android
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "ndk;27.2.12479018"
+          echo "ANDROID_HOME=${ANDROID_HOME}" >> "$GITHUB_ENV"
+          echo "NDK_HOME=${ANDROID_HOME}/ndk/27.2.12479018" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Rust Android targets
+        shell: bash
+        run: rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+
+      - name: Initialize Tauri Android project
+        run: npm run tauri:android:init -- --ci --skip-targets-install
+
+      - name: Build Tauri Android
+        run: npm run tauri:release:android -- --ci

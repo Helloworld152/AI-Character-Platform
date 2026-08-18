@@ -47,6 +47,11 @@ class ReusableThreadingHTTPServer(ThreadingHTTPServer):
 class WebHandler(BaseHTTPRequestHandler):
     server_version = "AICharacterWeb/0.1"
 
+    def do_OPTIONS(self) -> None:
+        self.send_response(204)
+        self._send_cors_headers()
+        self.end_headers()
+
     def do_GET(self) -> None:
         path = urlparse(self.path).path
         if path == "/":
@@ -841,6 +846,7 @@ class WebHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        self._send_cors_headers()
         self.end_headers()
         self.wfile.write(body)
 
@@ -852,8 +858,20 @@ class WebHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
+        self._send_cors_headers()
         self.end_headers()
         self.wfile.write(body)
+
+    def _send_cors_headers(self) -> None:
+        origin = self.headers.get("Origin", "")
+        if origin in {
+            "http://tauri.localhost",
+            "https://tauri.localhost",
+            "tauri://localhost",
+        }:
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 
 
 def _version_compare(a: str, b: str) -> int:

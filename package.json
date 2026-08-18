@@ -12,6 +12,13 @@
     "web": "python3 web_server.py",
     "dev": "vite --host 127.0.0.1 --port 5173",
     "build:web": "vite build",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "tauri:android:init": "tauri android init",
+    "tauri:release:android": "tauri android build --apk --aab --config src-tauri/tauri.android.conf.json",
+    "tauri:release:windows": "tauri build --bundles nsis,msi --config src-tauri/tauri.windows.conf.json",
+    "tauri:release:macos": "tauri build --bundles app,dmg --config src-tauri/tauri.macos.conf.json",
     "electron": "electron .",
     "start": "electron .",
     "dist": "npm run build:web && electron-builder --mac --publish never",
@@ -27,6 +34,7 @@
     "vite": "^6.0.7"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0",
     "electron": "^37.2.0",
     "electron-builder": "^25.1.8"
   },

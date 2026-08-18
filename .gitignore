@@ -21,6 +21,8 @@ compile.sh
 
 build/
 dist/
+src-tauri/target/
+src-tauri/gen/
 *.spec
 *.log
 npm-debug.log*

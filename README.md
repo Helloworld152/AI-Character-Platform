@@ -27,6 +27,7 @@ AI Character Platform 当前已经具备从选择角色、开始对话到持续�
 - Python 后端：角色加载、会话、数据库、记忆、工具调用
 - React/Vite 前端：聊天、设置、角色导入、更新界面
 - Electron 外壳：启动本地后端并提供桌面更新能力
+- Tauri 外壳：`AI Character Platform Tauri`，与 Electron 并行并复用同一套前端和 Python 后端
 
 ## 适用场景
 
@@ -130,6 +131,7 @@ macOS 正式自动更新需要签名和公证；未签名包适合测试，不�
 character_runtime/  Python 角色运行时、数据库、Agent、工具、记忆
 characters/         内置角色包
 electron/           Electron 主进程和 preload
+src-tauri/          Tauri Rust 外壳、后端进程生命周期和打包配置
 src/                React + Vite 桌面前端源码
 web/                简单静态 Web 客户端
 web_server.py       本地 HTTP API 和静态文件服务
@@ -173,6 +175,30 @@ python3 main.py
 npm install
 npm run electron
 ```
+
+启动 Tauri 开发客户端（与 Electron 并行）：
+
+```bash
+npm run tauri:dev
+```
+
+构建 Tauri 桌面包：
+
+```bash
+npm run tauri:build
+```
+
+Tauri 层会复用 `dist-web/`、`web_server.py`、`character_runtime/` 和内置 `characters/`。本机开发和当前打包方案需要 Python 3 在 PATH 中；Electron 的更新能力仍由 Electron 链路独立维护。
+
+按平台发布 Tauri 包（Android、Windows、macOS 产物统一带 `Tauri` 后缀，Electron 名称保持原样）：
+
+```bash
+npm run tauri:release:android
+npm run tauri:release:windows
+npm run tauri:release:macos
+```
+
+Android 构建前先执行一次 `npm run tauri:android:init`，并安装 Android Studio、SDK、NDK、Java 和对应 Rust targets。Android 端默认不启动桌面 Python 后端；如需可用聊天 API，在构建时设置 `VITE_API_BASE_URL` 指向移动端可访问的服务地址。Windows/macOS 继续使用随 Tauri 资源启动的本地 Python 后端。
 
 ### 数据与运行时设计
 
