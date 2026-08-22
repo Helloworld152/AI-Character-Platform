@@ -22,6 +22,7 @@
 body {
   margin: 0;
   min-height: 100vh;
+  min-height: 100dvh;
   color: var(--ink);
   font-family: "Avenir Next", "PingFang SC", "Hiragino Sans GB", sans-serif;
   background: var(--canvas);
@@ -40,6 +41,7 @@ textarea {
   grid-template-columns: clamp(248px, 22vw, 320px) minmax(0, 1fr);
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   margin: 0;
   overflow: hidden;
   transition: grid-template-columns 0.22s ease;
@@ -1543,4 +1545,406 @@ form.settings-panel {
   color: var(--muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+}
+
+/* 最终侧栏行为：左侧覆盖展开，折叠后主界面保持原位 */
+:root {
+  --rail-width: clamp(248px, 22vw, 320px);
+  --view-tabs-height: 43px;
+}
+
+.app-shell,
+.app-shell.left-collapsed {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 100vh;
+  height: 100dvh;
+}
+
+.conversation {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-left: 0;
+}
+
+.rail {
+  position: absolute;
+  inset: var(--view-tabs-height) auto 0 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  width: var(--rail-width);
+  height: auto;
+  min-height: 0;
+  padding: 18px;
+  border-right: 1px solid rgba(15, 17, 21, 0.1);
+  border-bottom: 0;
+  box-shadow: 16px 0 36px rgba(15, 17, 21, 0.12);
+  transform: translateX(0);
+  transition: transform 0.22s ease, visibility 0.22s ease;
+}
+
+.app-shell.left-collapsed .rail {
+  width: var(--rail-width);
+  padding: 18px;
+  border-right: 1px solid rgba(15, 17, 21, 0.1);
+  visibility: hidden;
+  pointer-events: none;
+  box-shadow: none;
+  transform: translateX(-100%);
+}
+
+.rail .rail-toggle {
+  display: none;
+}
+
+.rail-overlay-toggle {
+  position: relative;
+  top: auto;
+  left: auto;
+  z-index: auto;
+  flex: 0 0 auto;
+  width: 40px;
+  min-height: 32px;
+  height: 32px;
+  padding: 6px 8px;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  box-shadow: none;
+  transform: none;
+}
+
+.view-tabs {
+  position: relative;
+  z-index: 70;
+}
+
+.app-shell.left-collapsed .rail-overlay-toggle {
+  left: auto;
+}
+
+@media (max-width: 760px) {
+  :root {
+    --view-tabs-height: 44px;
+  }
+
+  .rail-overlay-toggle {
+    top: auto;
+    left: auto;
+    width: 40px;
+    min-height: 38px;
+    height: 38px;
+  }
+}
+.rail-overlay-toggle {
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top));
+  left: calc(var(--rail-width) - 42px);
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  min-height: 32px;
+  padding: 6px 8px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.rail-overlay-toggle svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 2;
+}
+
+.app-shell.left-collapsed .rail-overlay-toggle {
+  left: 0;
+}
+
+@media (max-width: 760px) {
+  :root {
+    --rail-width: min(280px, 82vw);
+  }
+
+  .rail,
+  .app-shell.left-collapsed .rail {
+    width: var(--rail-width);
+    padding: max(12px, env(safe-area-inset-top)) 14px 14px;
+  }
+
+  .app-shell.left-collapsed .rail {
+    padding: max(12px, env(safe-area-inset-top)) 14px 14px;
+  }
+
+  .brand,
+  .app-shell.left-collapsed .brand {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .brand-mark,
+  .app-shell.left-collapsed .brand-mark {
+    width: 48px;
+    height: 48px;
+  }
+
+  .brand-copy,
+  .app-shell.left-collapsed .brand-copy {
+    display: block;
+  }
+
+  .section-title,
+  .app-shell.left-collapsed .section-title {
+    display: block;
+  }
+
+  .character-list,
+  .app-shell.left-collapsed .character-list {
+    display: grid;
+    align-content: start;
+    justify-items: stretch;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    gap: 8px;
+    margin: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .character-item,
+  .app-shell.left-collapsed .character-item {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    width: 100%;
+    height: auto;
+    padding: 8px;
+  }
+
+  .character-item img,
+  .app-shell.left-collapsed .character-item img {
+    width: 48px;
+    height: 48px;
+  }
+
+  .character-item span,
+  .app-shell.left-collapsed .character-item span {
+    display: block;
+    min-width: 0;
+  }
+
+  .rail-footer,
+  .app-shell.left-collapsed .rail-footer {
+    display: grid;
+    flex: 0 0 auto;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+  }
+
+  .rail-import-button,
+  .rail-settings-button,
+  .app-shell.left-collapsed .rail-import-button,
+  .app-shell.left-collapsed .rail-settings-button {
+    width: 100%;
+    min-height: 42px;
+    padding: 7px 10px;
+    font-size: inherit;
+  }
+
+  .rail-import-button::before,
+  .rail-settings-button::before {
+    content: none;
+  }
+
+  .rail-overlay-toggle {
+    top: max(10px, env(safe-area-inset-top));
+    left: calc(var(--rail-width) - 42px);
+    width: 36px;
+    min-height: 32px;
+  }
+
+  .app-shell.left-collapsed .rail-overlay-toggle {
+    left: 0;
+  }
+}
+
+/* Android / 手机端：会话内容、输入区与弹窗 */
+@media (max-width: 760px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    min-width: 0;
+    min-height: 100%;
+  }
+
+  body {
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .conversation {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    border-left: 0;
+  }
+
+  .view-tabs {
+    flex: 0 0 auto;
+    padding: 6px 10px 0;
+  }
+
+  .view-tabs button {
+    min-height: 38px;
+    padding: 7px 14px;
+  }
+
+  .conversation-header {
+    align-items: center;
+    flex-direction: row;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .active-profile {
+    flex: 1 1 auto;
+    gap: 9px;
+    min-width: 0;
+  }
+
+  .active-profile img,
+  .avatar-placeholder {
+    width: 46px;
+    height: 46px;
+  }
+
+  .active-profile h2 {
+    max-width: 42vw;
+    overflow: hidden;
+    font-size: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .active-profile small {
+    display: none;
+  }
+
+  .header-actions {
+    flex: 0 0 auto;
+    width: auto;
+    flex-wrap: nowrap;
+    gap: 5px;
+  }
+
+  .header-actions .icon-button {
+    width: 40px;
+    height: 40px;
+  }
+
+  .header-actions .status {
+    display: none;
+  }
+
+  .message-list {
+    gap: 10px;
+    padding: 12px 10px;
+    overscroll-behavior: contain;
+  }
+
+  .bubble {
+    max-width: 90%;
+    padding: 10px 11px;
+    line-height: 1.55;
+  }
+
+  .composer {
+    grid-template-columns: minmax(0, 1fr) 54px;
+    gap: 8px;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .composer textarea {
+    min-height: 46px;
+    max-height: 120px;
+    padding: 10px;
+  }
+
+  .composer button {
+    min-height: 46px;
+  }
+
+  .select-state {
+    padding: 18px 12px;
+  }
+
+  .select-state > div {
+    padding: 22px 16px;
+  }
+
+  .select-state h3 {
+    font-size: 22px;
+  }
+
+  .settings-window,
+  .import-window,
+  .diary-window {
+    top: 50%;
+    width: calc(100% - 16px);
+    height: calc(100dvh - 16px);
+  }
+
+  .settings-head {
+    padding: 12px 14px;
+  }
+
+  .settings-content,
+  .diary-body {
+    padding: 12px;
+  }
+}
+
+/* 页签中的菜单按钮位于侧栏规则之后，避免被绝对定位覆盖 */
+.rail-overlay-toggle {
+  position: relative;
+  top: auto;
+  left: auto;
+  z-index: auto;
+  flex: 0 0 auto;
+  width: 40px;
+  min-height: 32px;
+  height: 32px;
+  padding: 6px 8px;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  box-shadow: none;
+  transform: none;
+}
+
+.view-tabs {
+  position: relative;
+  z-index: 70;
+}
+
+@media (max-width: 760px) {
+  .rail-overlay-toggle {
+    width: 40px;
+    min-height: 38px;
+    height: 38px;
+  }
 }

@@ -928,7 +928,10 @@ function App() {
             <button
               className={`character-item ${character.id === activeCharacterId ? "active" : ""}`}
               key={character.id}
-              onClick={() => switchCharacter(character.id)}
+              onClick={() => {
+                setLeftCollapsed(true);
+                switchCharacter(character.id);
+              }}
               type="button"
             >
               <img alt={character.display_name} src={character.avatar_url || ""} />
@@ -956,12 +959,20 @@ function App() {
             </button>
           ) : (
             <>
-              <button className="ghost-button rail-import-button" onClick={openImportModal} type="button">
+              <button
+                className="ghost-button rail-import-button"
+                onClick={() => {
+                  setLeftCollapsed(true);
+                  openImportModal();
+                }}
+                type="button"
+              >
                 导入角色
               </button>
               <button
                 className="ghost-button rail-settings-button"
                 onClick={() => {
+                  setLeftCollapsed(true);
                   setImportOpen(false);
                   setSettingsOpen(true);
                   setSettingsTab("model");
@@ -977,6 +988,16 @@ function App() {
 
       <section className="conversation">
         <div className="view-tabs">
+          <button
+            aria-label={leftCollapsed ? "展开侧边栏" : "收起侧边栏"}
+            className="rail-overlay-toggle"
+            onClick={() => setLeftCollapsed((value) => !value)}
+            type="button"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
+          </button>
           <button
             className={!galgameMode ? "active" : ""}
             onClick={() => setGalgameMode(false)}
